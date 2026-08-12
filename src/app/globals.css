@@ -1,26 +1,110 @@
 @import "tailwindcss";
 
+/**
+ * Tokens do Coredja.
+ *
+ * A paleta é escura por padrão: o painel fica num monitor lateral durante o
+ * culto, num ambiente de luz baixa, e uma tela clara nessa situação cansa e
+ * atrapalha quem opera. As telas das áreas seguem a mesma paleta para manter
+ * a plataforma com cara de uma coisa só.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --fundo: #0e1116;
+  --fundo-elevado: #161b22;
+  --fundo-cartao: #1c232d;
+  --borda: #2a3441;
+  --borda-forte: #3a4757;
+
+  --texto: #e8edf4;
+  --texto-suave: #97a4b6;
+  --texto-fraco: #6b7889;
+
+  --urgente: #f0503a;
+  --urgente-fundo: #2c1512;
+  --sucesso: #3fb27f;
+  --acento: #4a9eff;
+
+  --raio: 12px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-fundo: var(--fundo);
+  --color-fundo-elevado: var(--fundo-elevado);
+  --color-fundo-cartao: var(--fundo-cartao);
+  --color-borda: var(--borda);
+  --color-borda-forte: var(--borda-forte);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-texto-fraco: var(--texto-fraco);
+  --color-urgente: var(--urgente);
+  --color-urgente-fundo: var(--urgente-fundo);
+  --color-sucesso: var(--sucesso);
+  --color-acento: var(--acento);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--fundo);
+  /* Evita o zoom automático do iOS ao focar um campo de texto, que
+     desalinharia a tela de envio no celular da Cantina. */
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Foco sempre visível: parte do uso é por teclado, no PC do audiovisual. */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+/* Respeita quem configurou o sistema para reduzir animações. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Pulso do cartão urgente — chama atenção sem piscar de forma agressiva. */
+@keyframes pulso-urgente {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(240 80 58 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgb(240 80 58 / 0);
+  }
+}
+
+.pulso-urgente {
+  animation: pulso-urgente 2s ease-out infinite;
+}
+
+/* Entrada suave de recado novo, para o olho perceber o que mudou. */
+@keyframes entrada {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.entrada {
+  animation: entrada 0.25s ease-out;
 }

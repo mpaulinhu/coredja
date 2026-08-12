@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Dados do Coredja: banco SQLite e imagens enviadas pelas áreas.
+# Nunca entram no git — são os recados reais da igreja, e o backup deles é
+# copiar esta pasta (ver README).
+/dados/
