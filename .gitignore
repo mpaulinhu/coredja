@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# Exceção: o modelo de configuração não tem segredo nenhum e precisa estar no
+# git, senão quem instalar a plataforma não sabe o que preencher.
+!.env.example
 
 # vercel
 .vercel

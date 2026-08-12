@@ -18,12 +18,23 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 /** Erro de configuração, com instrução do que fazer. */
 export class ErroDeConfiguracao extends Error {}
 
+/** Pasta fixa onde a credencial mora. Está no .gitignore. */
+const PASTA_SEGREDOS = path.join(process.cwd(), 'segredos');
+
+/**
+ * Caminho do arquivo de credencial.
+ *
+ * `FIREBASE_CREDENCIAIS` aceita apenas o nome do arquivo, não um caminho
+ * completo: manter a pasta fixa permite ao build provar onde a leitura
+ * acontece — sem isso ele inclui o projeto inteiro na saída por precaução —
+ * e reforça que a credencial só pode viver na pasta protegida pelo
+ * .gitignore.
+ */
 function caminhoDaCredencial(): string {
-  const configurado =
-    process.env.FIREBASE_CREDENCIAIS ?? './segredos/firebase-admin.json';
-  return path.isAbsolute(configurado)
-    ? configurado
-    : path.join(process.cwd(), configurado);
+  const nome = path.basename(
+    process.env.FIREBASE_CREDENCIAIS ?? 'firebase-admin.json',
+  );
+  return path.join(PASTA_SEGREDOS, nome);
 }
 
 let instancia: Firestore | null = null;
