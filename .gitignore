@@ -44,3 +44,10 @@ next-env.d.ts
 # Nunca entram no git — são os recados reais da igreja, e o backup deles é
 # copiar esta pasta (ver README).
 /dados/
+
+# Chave de administrador do Firebase e qualquer outro segredo.
+# Quem tem esse arquivo lê, escreve e apaga tudo no projeto, ignorando as
+# regras de segurança. Nunca pode ir para o git.
+/segredos/
+*firebase-adminsdk*.json
+serviceAccountKey.json

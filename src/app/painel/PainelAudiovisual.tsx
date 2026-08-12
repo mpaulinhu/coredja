@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ImagemAnexo } from '@/components/ImagemAnexo';
 import { useAlertaSonoro } from '@/hooks/useAlertaSonoro';
 import { useEventos } from '@/hooks/useEventos';
 import { dataHora, hora, tempoDecorrido } from '@/lib/formatar';
@@ -349,22 +350,8 @@ function CartaoRecado({
       {mensagem.anexos.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2">
           {mensagem.anexos.map((anexo) => (
-            <li key={anexo.id} className="flex flex-col gap-1">
-              <a href={anexo.url} target="_blank" rel="noreferrer">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={anexo.url}
-                  alt={anexo.nomeArquivo}
-                  className="h-32 w-32 rounded-lg border border-borda object-cover"
-                />
-              </a>
-              <a
-                href={anexo.url}
-                download={anexo.nomeArquivo}
-                className="text-center text-xs font-medium text-acento hover:underline"
-              >
-                Baixar
-              </a>
+            <li key={anexo.id}>
+              <ImagemAnexo anexo={anexo} tamanho="h-32 w-32" mostrarDownload />
             </li>
           ))}
         </ul>
@@ -426,14 +413,7 @@ function LinhaHistorico({
           <ul className="mt-2 flex flex-wrap gap-2">
             {mensagem.anexos.map((anexo) => (
               <li key={anexo.id}>
-                <a href={anexo.url} target="_blank" rel="noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={anexo.url}
-                    alt={anexo.nomeArquivo}
-                    className="h-16 w-16 rounded border border-borda object-cover"
-                  />
-                </a>
+                <ImagemAnexo anexo={anexo} tamanho="h-16 w-16" />
               </li>
             ))}
           </ul>

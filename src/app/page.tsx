@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AREAS, caminhoDaArea } from '@/lib/areas';
+import { ARMAZENAMENTO_ATIVO } from '@/lib/store';
 
 /**
  * Página inicial.
@@ -8,10 +9,32 @@ import { AREAS, caminhoDaArea } from '@/lib/areas';
  * abrir no celular e salvar na tela inicial.
  */
 export default function Home() {
+  const naNuvem = ARMAZENAMENTO_ATIVO === 'firebase';
+
   return (
     <div className="mx-auto w-full max-w-2xl px-5 py-12">
       <h1 className="text-3xl font-bold tracking-tight text-texto">Coredja</h1>
       <p className="mt-1 text-texto-suave">Comunicação interna da igreja</p>
+
+      {/* Deixa visível onde os recados estão sendo guardados, para não ser
+          preciso abrir arquivo de configuração para descobrir. */}
+      <p
+        className="mt-3 inline-flex items-center gap-2 rounded-full border border-borda bg-fundo-cartao px-3 py-1.5 text-xs"
+        title={
+          naNuvem
+            ? 'Os recados são salvos no Cloud Firestore. As imagens continuam no disco deste PC.'
+            : 'Os recados e as imagens são salvos em dados/, neste PC.'
+        }
+      >
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ background: naNuvem ? 'var(--sucesso)' : 'var(--acento)' }}
+          aria-hidden="true"
+        />
+        <span className="text-texto-suave">
+          {naNuvem ? 'Recados na nuvem (Firebase)' : 'Recados neste PC (local)'}
+        </span>
+      </p>
 
       <section className="mt-8">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-texto-fraco">

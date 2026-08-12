@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ImagemAnexo } from '@/components/ImagemAnexo';
 import { useEventos } from '@/hooks/useEventos';
 import { hora } from '@/lib/formatar';
 import { MAXIMO_ANEXOS, TAMANHO_MAXIMO_BYTES } from '@/lib/limites';
@@ -364,14 +365,7 @@ function BalaoMensagem({
           <ul className="mt-2 flex flex-wrap gap-2">
             {mensagem.anexos.map((anexo) => (
               <li key={anexo.id}>
-                <a href={anexo.url} target="_blank" rel="noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={anexo.url}
-                    alt={anexo.nomeArquivo}
-                    className="h-28 w-28 rounded-lg border border-borda object-cover"
-                  />
-                </a>
+                <ImagemAnexo anexo={anexo} tamanho="h-28 w-28" />
               </li>
             ))}
           </ul>
