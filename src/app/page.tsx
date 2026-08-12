@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { LinkDaArea } from '@/components/LinkDaArea';
 import { AREAS, caminhoDaArea } from '@/lib/areas';
 import { ARMAZENAMENTO_ATIVO } from '@/lib/store';
 
@@ -54,29 +55,24 @@ export default function Home() {
           Áreas
         </h2>
         <p className="mt-1 text-sm text-texto-fraco">
-          Abra o link no celular da área e salve na tela inicial.
+          Copie o link, abra no celular da área e mande salvar na tela inicial.
         </p>
 
         <ul className="mt-3 flex flex-col gap-2">
           {AREAS.map((area) => (
-            <li key={area.slug}>
-              <Link
-                href={caminhoDaArea(area)}
-                className="flex items-center gap-3 rounded-xl border border-borda bg-fundo-cartao px-4 py-4 hover:bg-borda"
-              >
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ background: area.cor }}
-                  aria-hidden="true"
-                />
-                <span className="font-semibold text-texto">{area.nome}</span>
-                <code className="ml-auto text-xs text-texto-fraco">
-                  {caminhoDaArea(area)}
-                </code>
-              </Link>
-            </li>
+            <LinkDaArea
+              key={area.slug}
+              nome={area.nome}
+              cor={area.cor}
+              caminho={caminhoDaArea(area)}
+            />
           ))}
         </ul>
+
+        <p className="mt-3 text-xs text-texto-fraco">
+          Cada link é secreto: quem o tiver manda recado como se fosse a área.
+          Não publique em grupo.
+        </p>
       </section>
     </div>
   );
