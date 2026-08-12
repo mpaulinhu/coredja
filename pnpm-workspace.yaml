@@ -1,2 +1,7 @@
 allowBuilds:
+  # Compila o driver nativo do SQLite (armazenamento local).
   better-sqlite3: true
+  # Scripts opcionais de otimização do firebase-admin. Negados: o pacote
+  # funciona sem eles, e menos código executado na instalação é melhor.
+  '@firebase/util': false
+  protobufjs: false

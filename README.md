@@ -14,6 +14,12 @@ Na primeira vez, instale as dependências:
 pnpm install
 ```
 
+E crie o arquivo de configuração a partir do modelo:
+
+```bash
+cp .env.example .env.local
+```
+
 Para usar no domingo:
 
 ```bash
@@ -133,12 +139,92 @@ Reinicie o servidor e a área nova aparece na home, no painel e nos botões de
 
 ---
 
-## Backup
+## Onde os recados ficam guardados
 
-Tudo — recados, histórico e imagens — vive na pasta `dados/`. Fazer backup é
-copiar essa pasta. Restaurar é colocá-la de volta.
+O Coredja funciona de dois jeitos, e a escolha é uma linha no `.env.local`:
 
-Ela não vai para o git de propósito: são as mensagens reais da igreja.
+```bash
+COREDJA_STORAGE=firebase   # recados na nuvem (padrão hoje)
+COREDJA_STORAGE=sqlite     # tudo neste PC, sem internet
+```
+
+Depois de trocar, rode `pnpm build` e `pnpm start` de novo. A home mostra qual
+está ativo, com uma bolinha verde (nuvem) ou azul (local).
+
+| | Firebase | SQLite local |
+|---|---|---|
+| Onde ficam os recados | Nuvem do Google | `dados/coredja.db` |
+| Onde ficam as imagens | **Neste PC**, em `dados/uploads/` | `dados/uploads/` |
+| Precisa de internet | Sim | Não |
+| Se o PC for perdido | Recados sobrevivem | Perde tudo |
+
+Poder alternar existe por um motivo prático: se a internet cair no meio de um
+culto, troque para `sqlite`, reinicie, e os recados voltam a funcionar na
+hora. Os que estavam na nuvem continuam lá, esperando você voltar.
+
+### ⚠️ As imagens não estão na nuvem
+
+Mesmo com `COREDJA_STORAGE=firebase`, **as imagens continuam no disco deste
+PC**. Isso porque o Firebase Storage exige o plano pago (Blaze) e o projeto
+está no plano gratuito (Spark).
+
+Na prática: se este PC for trocado ou a pasta `dados/` for perdida, os
+**recados sobrevivem** e os **banners não**. Onde havia imagem, a tela mostra
+"imagem não encontrada" em vez de quebrar.
+
+Se um dia isso incomodar, há dois caminhos: ativar o plano Blaze e mover as
+imagens para o Firebase Storage, ou manter o backup da pasta `dados/uploads/`.
+
+### Backup
+
+Com `COREDJA_STORAGE=firebase`, o Google já cuida dos recados. Falta só copiar
+a pasta `dados/uploads/`, que guarda as imagens.
+
+Com `COREDJA_STORAGE=sqlite`, copie a pasta `dados/` inteira — ela tem tudo.
+
+A pasta não vai para o git de propósito: são as mensagens reais da igreja.
+
+---
+
+## O projeto no Firebase
+
+O projeto é o **`coreadja-43109`**, no plano gratuito (Spark).
+
+### A chave de administrador
+
+O arquivo `segredos/firebase-admin.json` é o que permite ao servidor acessar
+o banco. **Ele é a chave da casa**: quem o tem lê, escreve e apaga tudo,
+ignorando as regras de segurança.
+
+Ele está no `.gitignore` e nunca deve ser enviado por e-mail, chat ou anexado
+em lugar nenhum. Se vazar, gere uma nova em Console → ⚙️ Configurações do
+projeto → Contas de serviço, e exclua a antiga em
+[IAM & Admin](https://console.cloud.google.com/iam-admin/serviceaccounts).
+
+Para instalar em outro PC, baixe uma chave nova por esse mesmo caminho e
+salve como `segredos/firebase-admin.json`.
+
+### Por que o banco fica fechado
+
+As regras do Firestore estão em modo produção, o que significa
+`allow read, write: if false` — **ninguém entra pelo navegador**, nem para
+ler.
+
+Isso funciona porque o navegador nunca fala com o Firestore direto: o celular
+da Cantina conversa com este servidor, e só o servidor conversa com o banco,
+usando a chave de administrador que ignora as regras.
+
+É mais seguro do que abrir o banco e proteger com regras, porque não existe
+superfície pública nenhuma. O link secreto de cada área continua sendo
+conferido no servidor, como sempre foi.
+
+### Sobre índices
+
+O Firestore exige um índice, criado à mão no Console, para consultas que
+filtram por um campo e ordenam por outro. Para evitar esse passo manual, todas
+as ordenações do Coredja acontecem em memória — com o volume de uma igreja,
+isso é instantâneo. Se um dia o histórico crescer muito, aí vale criar os
+índices e mover a ordenação para o banco.
 
 ---
 
@@ -172,32 +258,45 @@ src/
 │  │  ├─ eventos/         Canal de tempo real (SSE)
 │  │  └─ imagens/         Serve as imagens enviadas
 │  └─ page.tsx            Home com a lista de links
+├─ components/
+│  └─ ImagemAnexo.tsx     Miniatura, com aviso se a imagem sumiu
 ├─ hooks/
 │  ├─ useEventos.ts       Recebe os avisos de tempo real
 │  └─ useAlertaSonoro.ts  Som de recado novo
 └─ lib/
    ├─ types.ts            Contrato de dados (Area, Mensagem, Store)
-   ├─ store.ts            Ponto único de troca do armazenamento
-   ├─ sqlite-store.ts     Implementação atual (SQLite local)
-   ├─ db.ts               Conexão e schema do banco
+   ├─ store.ts            Escolhe o armazenamento (sqlite ou firebase)
+   ├─ sqlite-store.ts     Implementação local
+   ├─ db.ts               Conexão e schema do SQLite
+   ├─ firebase-store.ts   Implementação na nuvem
+   ├─ firebase.ts         Conexão com o Firestore
    ├─ areas.ts            As áreas da igreja e seus links
    ├─ uploads.ts          Validação e gravação das imagens
    ├─ limites.ts          Limites de tamanho, usados nos dois lados
    └─ eventos.ts          Publicação dos avisos de tempo real
 ```
 
-### Sobre a migração para Firebase
+### Como as duas implementações convivem
 
-Hoje os dados ficam no PC do audiovisual, num arquivo SQLite. Se um dia a
-plataforma precisar ser acessada de fora da igreja, a troca para Firebase está
-prevista: todo acesso a dados passa por [`src/lib/store.ts`](src/lib/store.ts),
-que expõe a interface `Store` definida em
-[`src/lib/types.ts`](src/lib/types.ts).
+Todo o resto do código conhece apenas a interface `Store`, definida em
+[`src/lib/types.ts`](src/lib/types.ts) — nove operações, como "criar
+mensagem" e "listar pendentes". Ela não diz nada sobre *onde* os dados ficam.
 
-Migrar significa escrever um `firebase-store.ts` que satisfaça essa mesma
-interface e trocar uma linha em `store.ts`. As telas não mudam.
+Duas implementações satisfazem esse contrato:
+[`sqlite-store.ts`](src/lib/sqlite-store.ts) e
+[`firebase-store.ts`](src/lib/firebase-store.ts). Quem escolhe entre elas é
+[`store.ts`](src/lib/store.ts), lendo `COREDJA_STORAGE` do `.env.local`.
 
-Duas peças a mais fazem parte dessa migração: as imagens passam do disco para
-o Firebase Storage (o campo `url` de cada anexo já é opaco para quem exibe), e
-os avisos de tempo real de [`src/lib/eventos.ts`](src/lib/eventos.ts) dão lugar
-aos listeners nativos do Firestore.
+É por isso que a migração para o Firebase não mexeu em nenhuma tela: elas
+importam `store` e chamam as mesmas nove operações, sem saber o que está do
+outro lado.
+
+### Sobre o tempo real
+
+O Firestore avisa sozinho quando um dado muda, mas esse aviso vai para quem
+fala com ele direto — e aqui o navegador não fala. Por isso o Coredja mantém
+o canal próprio de [`src/lib/eventos.ts`](src/lib/eventos.ts), que empurra os
+avisos do servidor para as telas abertas.
+
+Funciona igual nos dois modos de armazenamento, e é o que faz o recado
+aparecer no painel sem ninguém apertar F5.

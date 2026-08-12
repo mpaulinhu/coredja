@@ -13,9 +13,6 @@ import path from 'node:path';
 const RAIZ_DADOS = path.join(process.cwd(), 'dados');
 const ARQUIVO_DB = path.join(RAIZ_DADOS, 'coredja.db');
 
-/** Pasta onde ficam as imagens enviadas pelas áreas. */
-export const PASTA_UPLOADS = path.join(RAIZ_DADOS, 'uploads');
-
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS areas (
   slug  TEXT PRIMARY KEY,
@@ -75,7 +72,6 @@ export function getDb(): Database.Database {
   }
 
   if (!existsSync(RAIZ_DADOS)) mkdirSync(RAIZ_DADOS, { recursive: true });
-  if (!existsSync(PASTA_UPLOADS)) mkdirSync(PASTA_UPLOADS, { recursive: true });
 
   const db = new Database(ARQUIVO_DB);
 

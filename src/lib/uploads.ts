@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
+import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { PASTA_UPLOADS } from './db';
 import { TAMANHO_MAXIMO_BYTES } from './limites';
 import type { Anexo } from './types';
 
@@ -12,9 +12,31 @@ import type { Anexo } from './types';
  * por uma rota que lê do disco, nunca como arquivo estático. Isso garante que
  * o que sai daqui seja sempre imagem, com o tipo que validamos na entrada.
  *
+ * As imagens ficam no disco mesmo com os recados no Firestore: o Firebase
+ * Storage exige o plano pago, e o disco local resolve sem custo. Quando isso
+ * mudar, basta trocar a gravação aqui — o campo `url` de cada anexo já é
+ * opaco para quem exibe.
+ *
  * Só o servidor importa este arquivo. Os limites usados também pelas telas
  * ficam em `limites.ts`.
  */
+
+/** Pasta onde ficam as imagens enviadas pelas áreas. */
+export const PASTA_UPLOADS = path.join(process.cwd(), 'dados', 'uploads');
+
+/**
+ * Cria a pasta de imagens se ainda não existir.
+ *
+ * Fica aqui, e não no módulo do banco, porque as imagens são gravadas em
+ * disco independentemente de onde os recados são guardados. Quando este
+ * cuidado morava em `db.ts`, ligar o Firestore fazia a pasta nunca ser
+ * criada e todo envio com imagem falhava.
+ */
+function garantirPasta(): void {
+  if (!existsSync(PASTA_UPLOADS)) {
+    mkdirSync(PASTA_UPLOADS, { recursive: true });
+  }
+}
 
 /**
  * Formatos aceitos e sua extensão no disco.
@@ -90,6 +112,8 @@ export async function salvarImagem(arquivo: File): Promise<Omit<Anexo, 'id'>> {
   if (!pareceImagem(bytes)) {
     throw new ErroDeUpload('O arquivo não parece ser uma imagem válida.');
   }
+
+  garantirPasta();
 
   const id = nanoid();
   const nomeNoDisco = `${id}${extensao}`;

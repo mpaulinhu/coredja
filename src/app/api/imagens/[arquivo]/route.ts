@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { PASTA_UPLOADS } from '@/lib/db';
+import { PASTA_UPLOADS } from '@/lib/uploads';
 
 /**
  * Serve as imagens enviadas pelas áreas.
