@@ -2,20 +2,18 @@ import { nanoid } from 'nanoid';
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { imagensEmbutidas, LIMITE_EMBUTIDO_BYTES } from './imagens';
 import { TAMANHO_MAXIMO_BYTES } from './limites';
 import type { Anexo } from './types';
 
 /**
  * Recebimento das imagens enviadas pelas áreas (banners da cantina, fotos).
  *
- * Os arquivos vão para `dados/uploads/`, fora da pasta pública: são servidos
- * por uma rota que lê do disco, nunca como arquivo estático. Isso garante que
- * o que sai daqui seja sempre imagem, com o tipo que validamos na entrada.
- *
- * As imagens ficam no disco mesmo com os recados no Firestore: o Firebase
- * Storage exige o plano pago, e o disco local resolve sem custo. Quando isso
- * mudar, basta trocar a gravação aqui — o campo `url` de cada anexo já é
- * opaco para quem exibe.
+ * Guarda de dois jeitos, conforme `COREDJA_STORAGE` — ver `imagens.ts` para o
+ * porquê. Em disco, os arquivos vão para `dados/uploads/`, fora da pasta
+ * pública: são servidos por uma rota que lê do disco, nunca como arquivo
+ * estático, o que garante que o que sai dali seja sempre imagem, com o tipo
+ * validado na entrada.
  *
  * Só o servidor importa este arquivo. Os limites usados também pelas telas
  * ficam em `limites.ts`.
@@ -113,6 +111,27 @@ export async function salvarImagem(arquivo: File): Promise<Omit<Anexo, 'id'>> {
     throw new ErroDeUpload('O arquivo não parece ser uma imagem válida.');
   }
 
+  // --- Imagem embutida no recado (plataforma hospedada) -------------------
+  if (imagensEmbutidas()) {
+    if (arquivo.size > LIMITE_EMBUTIDO_BYTES) {
+      const limite = Math.round(LIMITE_EMBUTIDO_BYTES / 1024);
+      throw new ErroDeUpload(
+        `Imagem muito pesada (limite de ${limite} KB). Tire uma foto com ` +
+          'menos qualidade, ou envie o arquivo já reduzido.',
+      );
+    }
+
+    return {
+      nomeArquivo: limparNome(arquivo.name),
+      tipo: arquivo.type,
+      tamanho: arquivo.size,
+      // A própria imagem, embutida. O navegador exibe e baixa igual a uma URL
+      // comum — quem exibe não precisa saber a diferença.
+      url: `data:${arquivo.type};base64,${Buffer.from(bytes).toString('base64')}`,
+    };
+  }
+
+  // --- Imagem em disco (instalação no PC do audiovisual) ------------------
   garantirPasta();
 
   const id = nanoid();

@@ -1,7 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { AREAS } from './areas';
 import { getFirestoreDb } from './firebase';
-import type { Area, Mensagem, NovaMensagem, Store } from './types';
+import type { Mensagem, NovaMensagem, Store } from './types';
 
 /**
  * Implementação de `Store` sobre o Cloud Firestore.
@@ -50,6 +50,12 @@ function db(): Firestore {
  *
  * Como no SQLite, o código é a fonte da verdade: trocar um token vazado é
  * editar o arquivo e reiniciar. Roda uma vez por processo.
+ *
+ * O `token` NÃO é gravado. Ele é o segredo do link de cada área, e as regras
+ * do Firestore liberam leitura das áreas para o navegador (é o que permite o
+ * tempo real). Guardá-lo aqui exporia o link de todas as áreas a qualquer um
+ * que abrisse o banco. A conferência do token acontece no servidor, contra
+ * `areas.ts`.
  */
 let semeadura: Promise<void> | null = null;
 
@@ -60,7 +66,13 @@ async function garantirSemeadura(): Promise<void> {
     semeadura = (async () => {
       const lote = db().batch();
       for (const area of AREAS) {
-        lote.set(db().collection(COLECAO_AREAS).doc(area.slug), area);
+        // Só nome e cor: o token é segredo e não pode ir para um banco cuja
+        // leitura o navegador alcança.
+        lote.set(db().collection(COLECAO_AREAS).doc(area.slug), {
+          slug: area.slug,
+          nome: area.nome,
+          cor: area.cor,
+        });
       }
       await lote.commit();
     })().catch((erro) => {
@@ -94,38 +106,21 @@ function paraMensagem(
 export const firebaseStore: Store = {
   async listarAreas() {
     await garantirSemeadura();
-    const snap = await db().collection(COLECAO_AREAS).orderBy('nome').get();
-
-    // Se a coleção sumiu (limpeza manual, por exemplo), devolve o que está em
-    // areas.ts em vez de deixar o painel sem nenhuma área. O código é a fonte
-    // da verdade; o banco é só onde ele foi copiado.
-    if (snap.empty) {
-      return [...AREAS].sort((a, b) => a.nome.localeCompare(b.nome));
-    }
-
-    return snap.docs.map((d) => d.data() as Area);
+    // As áreas vêm de areas.ts, não do banco: o token não é gravado lá, e o
+    // código é a fonte da verdade de qualquer forma. O que está no Firestore
+    // existe para o navegador poder exibir nome e cor no tempo real.
+    return [...AREAS].sort((a, b) => a.nome.localeCompare(b.nome));
   },
 
   async buscarArea(slug) {
     await garantirSemeadura();
-    const ref = db().collection(COLECAO_AREAS).doc(slug);
-    const doc = await ref.get();
-    if (doc.exists) return doc.data() as Area;
-
-    // A área está em areas.ts mas não no banco: alguém limpou a coleção, ou a
-    // semeadura falhou. Regrava a partir do código, que é a fonte da verdade,
-    // em vez de recusar o acesso e exigir reiniciar o servidor.
-    const doCodigo = AREAS.find((a) => a.slug === slug);
-    if (!doCodigo) return null;
-
-    await ref.set(doCodigo);
-    return doCodigo;
+    return AREAS.find((a) => a.slug === slug) ?? null;
   },
 
   async autenticarArea(slug, token) {
     const area = await this.buscarArea(slug);
-    // Confere o token aqui, no servidor. O Firestore em si continua fechado
-    // para qualquer acesso vindo do navegador.
+    // Confere o token no servidor, contra areas.ts. Ele nunca chega ao
+    // Firestore, então nem quem lê o banco descobre o link de uma área.
     return area && area.token === token ? area : null;
   },
 

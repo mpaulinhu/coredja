@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImagemAnexo } from '@/components/ImagemAnexo';
 import { useEventos } from '@/hooks/useEventos';
+import { comprimirImagem } from '@/lib/comprimir';
 import { hora } from '@/lib/formatar';
 import { MAXIMO_ANEXOS, TAMANHO_MAXIMO_BYTES } from '@/lib/limites';
 import type { Area, Mensagem } from '@/lib/types';
@@ -33,6 +34,7 @@ export function TelaDaArea({ area, chave, mensagensIniciais }: Props) {
   const [texto, setTexto] = useState('');
   const [urgente, setUrgente] = useState(false);
   const [imagens, setImagens] = useState<ImagemSelecionada[]>([]);
+  const [preparando, setPreparando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviado, setEnviado] = useState(false);
@@ -53,15 +55,11 @@ export function TelaDaArea({ area, chave, mensagensIniciais }: Props) {
     }
   }, [chave]);
 
-  // Só recarrega quando o evento é desta área — o aviso de um recado do Kids
-  // não precisa mexer na tela da Cantina.
+  // Escuta só esta área — o aviso de um recado do Kids não precisa mexer na
+  // tela da Cantina.
   useEventos(
-    useCallback(
-      (evento) => {
-        if (evento.areaSlug === area.slug) void recarregar();
-      },
-      [area.slug, recarregar],
-    ),
+    useCallback(() => void recarregar(), [recarregar]),
+    area.slug,
   );
 
   useEffect(() => {
@@ -77,7 +75,7 @@ export function TelaDaArea({ area, chave, mensagensIniciais }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function adicionarImagens(lista: FileList | null) {
+  async function adicionarImagens(lista: FileList | null) {
     if (!lista || lista.length === 0) return;
     setErro(null);
 
@@ -98,12 +96,20 @@ export function TelaDaArea({ area, chave, mensagensIniciais }: Props) {
       return;
     }
 
-    const novas = escolhidas.map((arquivo) => ({
-      arquivo,
-      previa: URL.createObjectURL(arquivo),
-    }));
-
-    setImagens((atuais) => [...atuais, ...novas]);
+    // Reduz no próprio celular: a foto sobe em segundos em vez de minutos, e
+    // cabe no limite quando a plataforma está hospedada.
+    setPreparando(true);
+    try {
+      const novas = await Promise.all(
+        escolhidas.map(async (original) => {
+          const arquivo = await comprimirImagem(original);
+          return { arquivo, previa: URL.createObjectURL(arquivo) };
+        }),
+      );
+      setImagens((atuais) => [...atuais, ...novas]);
+    } finally {
+      setPreparando(false);
+    }
   }
 
   function removerImagem(indice: number) {
@@ -279,10 +285,11 @@ export function TelaDaArea({ area, chave, mensagensIniciais }: Props) {
             <button
               type="button"
               onClick={() => inputArquivo.current?.click()}
-              className="flex h-12 items-center gap-2 rounded-xl border border-borda bg-fundo-cartao px-4 text-sm font-medium text-texto-suave active:bg-borda"
+              disabled={preparando}
+              className="flex h-12 items-center gap-2 rounded-xl border border-borda bg-fundo-cartao px-4 text-sm font-medium text-texto-suave active:bg-borda disabled:opacity-60"
             >
               <IconeImagem />
-              Imagem
+              {preparando ? 'Preparando…' : 'Imagem'}
             </button>
 
             <button
@@ -311,7 +318,7 @@ export function TelaDaArea({ area, chave, mensagensIniciais }: Props) {
 
           <button
             type="submit"
-            disabled={enviando}
+            disabled={enviando || preparando}
             className="mt-3 h-14 w-full rounded-xl text-base font-bold text-white disabled:opacity-60"
             style={{ background: urgente ? 'var(--urgente)' : area.cor }}
           >

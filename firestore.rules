@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Regras de segurança do Firestore do Coredja.
+//
+// LEITURA liberada, ESCRITA bloqueada.
+//
+// A leitura precisa estar aberta porque é o navegador que escuta o Firestore
+// para receber os recados em tempo real — é isso que faz um recado aparecer no
+// painel sem ninguém atualizar a página.
+//
+// A escrita fica fechada para todos. Todo envio passa pelo servidor, que usa a
+// credencial de administrador e ignora estas regras. Assim ninguém cria,
+// altera ou apaga recado direto no banco, mesmo conhecendo o endereço do
+// projeto.
+//
+// O que a leitura aberta expõe: o texto dos recados e o nome das áreas. Numa
+// comunicação interna de igreja isso é aceitável — são avisos operacionais,
+// não dado pessoal sensível.
+//
+// O que ela NÃO expõe: o `token` de cada área, que é o segredo do link de
+// envio. Ele nunca é gravado no Firestore (ver firebase-store.ts) e é
+// conferido no servidor, contra areas.ts.
+//
+// Para publicar estas regras:
+//   Console do Firebase → Firestore → aba "Regras" → colar e Publicar
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Recados. O navegador lê para exibir e para receber os avisos em tempo
+    // real; escrever só pelo servidor.
+    match /mensagens/{mensagem} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Áreas (nome e cor). Sem o token — ver comentário acima.
+    match /areas/{area} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Qualquer outra coleção fica fechada por padrão. Sem este bloco, uma
+    // coleção nova criada no futuro herdaria o comportamento errado.
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}
