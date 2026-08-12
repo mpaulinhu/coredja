@@ -76,10 +76,12 @@ echo.
 echo   NESTE PC (painel do audiovisual):
 echo      http://localhost:3000/painel
 echo.
+REM Os links das areas nao sao impressos aqui: eles contem o token secreto de
+REM cada uma, e este arquivo vai para um repositorio publico. A home mostra
+REM todos eles, ja montados.
 if defined IP (
     echo   NOS CELULARES das areas ^(mesmo Wi-Fi^):
-    echo      Cantina:  http://%IP%:3000/a/cantina-x7k2m9
-    echo      Kids:     http://%IP%:3000/a/kids-p4w8n3
+    echo      Abra http://%IP%:3000 e use os links das areas.
     echo.
 ) else (
     echo   [ATENCAO] Este PC nao esta conectado a uma rede local.

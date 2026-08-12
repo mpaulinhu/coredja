@@ -3,28 +3,84 @@ import type { Area } from './types';
 /**
  * Áreas da igreja que falam com o audiovisual.
  *
- * Ficam aqui, em código, em vez de numa tela de cadastro: são duas, mudam
+ * Ficam aqui, em código, em vez de numa tela de cadastro: são poucas, mudam
  * quase nunca, e uma tela de administração para isso seria trabalho sem
- * retorno. Adicionar uma área é acrescentar um item nesta lista e reiniciar.
+ * retorno. Adicionar uma área é acrescentar um item nesta lista.
  *
- * O `token` é o trecho secreto do link de cada área (/a/{slug}-{token}).
- * Para invalidar um link que vazou, troque o token e reinicie: o link antigo
- * para de funcionar na hora e o histórico continua intacto.
+ * O `token` NÃO fica aqui. Ele é o trecho secreto do link de cada área
+ * (`/a/{slug}-{token}`) e este repositório é público — quem lesse o código
+ * teria o link de todas as áreas e poderia mandar recado se passando por
+ * elas. Cada token vem de uma variável de ambiente própria, definida em
+ * `.env.local` (no PC) ou no painel da hospedagem.
  */
-export const AREAS: Area[] = [
+
+/** Uma área, sem o segredo. O token entra depois, vindo do ambiente. */
+type DefinicaoDeArea = Omit<Area, 'token'> & {
+  /** Nome da variável de ambiente que guarda o token desta área. */
+  variavelDoToken: string;
+};
+
+const DEFINICOES: DefinicaoDeArea[] = [
   {
     slug: 'cantina',
     nome: 'Cantina',
-    token: 'x7k2m9',
     cor: '#e07a3f',
+    variavelDoToken: 'COREDJA_TOKEN_CANTINA',
   },
   {
     slug: 'kids',
     nome: 'Kids',
-    token: 'p4w8n3',
     cor: '#3f8fe0',
+    variavelDoToken: 'COREDJA_TOKEN_KIDS',
   },
 ];
+
+/**
+ * Token de uso local, quando a variável de ambiente não está definida.
+ *
+ * Existe para quem baixa o projeto conseguir rodar e ver funcionando sem
+ * configurar nada. É previsível de propósito e **não protege nada** — por isso
+ * o servidor recusa usá-lo quando a plataforma está publicada (ver abaixo).
+ */
+function tokenDeDesenvolvimento(slug: string): string {
+  return `dev-${slug}`;
+}
+
+/** Se a plataforma está rodando publicada, e não no PC de alguém. */
+function estaPublicada(): boolean {
+  // Definidas automaticamente por Netlify e Vercel. Localmente não existem.
+  return Boolean(process.env.NETLIFY || process.env.VERCEL);
+}
+
+function tokenDaArea(definicao: DefinicaoDeArea): string {
+  const doAmbiente = process.env[definicao.variavelDoToken]?.trim();
+  if (doAmbiente) return doAmbiente;
+
+  if (estaPublicada()) {
+    throw new Error(
+      `A variável ${definicao.variavelDoToken} não está definida.\n\n` +
+        `Sem ela o link da área "${definicao.nome}" seria previsível, e ` +
+        'qualquer pessoa poderia mandar recado se passando por ela.\n\n' +
+        'Cadastre um valor secreto qualquer nas variáveis de ambiente da ' +
+        'hospedagem (letras e números, sem espaço) e publique de novo.',
+    );
+  }
+
+  return tokenDeDesenvolvimento(definicao.slug);
+}
+
+/**
+ * As áreas, já com os tokens resolvidos.
+ *
+ * Só o servidor importa este arquivo — os tokens nunca chegam ao navegador
+ * nem ao Firestore.
+ */
+export const AREAS: Area[] = DEFINICOES.map((definicao) => ({
+  slug: definicao.slug,
+  nome: definicao.nome,
+  cor: definicao.cor,
+  token: tokenDaArea(definicao),
+}));
 
 /** Monta o caminho de acesso de uma área, como ela recebe no celular. */
 export function caminhoDaArea(area: Area): string {

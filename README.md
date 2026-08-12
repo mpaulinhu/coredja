@@ -39,22 +39,26 @@ sozinho a cada alteração, mas é mais lento que o `pnpm start`.
 
 ## Os endereços
 
-O `Coredja.bat` mostra os três links prontos quando liga. Eles são:
+Abra a **home** (`localhost:3000`) — ela lista tudo:
 
-| Quem | Endereço |
+| Quem | Onde |
 |---|---|
-| Audiovisual (você, neste PC) | `localhost:3000/painel` |
-| Cantina (celular) | `<ip-do-pc>:3000/a/cantina-x7k2m9` |
-| Kids (celular ou PC da sala) | `<ip-do-pc>:3000/a/kids-p4w8n3` |
+| Audiovisual (você) | Botão **Abrir painel** |
+| Cantina e Kids | Na seção **Áreas**, com botão de copiar o link |
+
+Os links das áreas têm um trecho secreto (`/a/cantina-XXXXX`) que não aparece
+neste README de propósito: **quem tem o link manda recado como se fosse a
+área**. Eles são montados a partir dos tokens do `.env.local`.
 
 ### Nos celulares das áreas
 
 Os celulares não conseguem abrir `localhost` — esse endereço significa "este
 computador aqui". Por isso o `.bat` mostra o número do PC na rede, algo como
-`192.168.50.104`.
+`192.168.50.104`. Abra esse endereço no celular e a home aparece com os links
+prontos, já com o endereço completo.
 
-Abra o link no celular da área e mande **salvar na tela inicial**. Vira um
-ícone, e a pessoa não precisa digitar nada de novo.
+Depois é só **salvar na tela inicial**. Vira um ícone, e a pessoa não precisa
+digitar nada de novo.
 
 > **Se o número mudar.** Alguns roteadores trocam esse número de tempos em
 > tempos, e aí o link salvo para de funcionar. Se isso acontecer, o `.bat`
@@ -122,9 +126,21 @@ Não há login: quem tem o link de uma área envia recados como aquela área.
 que um link vazado num grupo de WhatsApp deixa qualquer pessoa mandar recado
 como se fosse a Cantina.
 
-Para trocar um link, abra [`src/lib/areas.ts`](src/lib/areas.ts) e mude o
-`token` da área. O link antigo para de funcionar assim que você reiniciar o
-servidor. O histórico não se perde.
+Os tokens ficam em variáveis de ambiente, **nunca no código** — este
+repositório é público, e no código qualquer um os leria:
+
+```bash
+# .env.local (no PC) ou painel da hospedagem
+COREDJA_TOKEN_CANTINA=algumacoisasecreta
+COREDJA_TOKEN_KIDS=outracoisasecreta
+```
+
+Para invalidar um link que vazou, troque o valor e reinicie. O link antigo
+para de funcionar na hora e o histórico continua intacto.
+
+Sem essas variáveis, a plataforma roda localmente com tokens previsíveis
+(`dev-cantina`), só para você conseguir testar — e **se recusa a subir
+publicada**, para não deixar as áreas abertas por esquecimento.
 
 ---
 
@@ -136,13 +152,13 @@ Abra [`src/lib/areas.ts`](src/lib/areas.ts) e acrescente um item à lista:
 {
   slug: 'recepcao',
   nome: 'Recepção',
-  token: 'k9m2p7',   // invente um trecho secreto qualquer
-  cor: '#7c5cd6',    // cor de identificação no painel
+  cor: '#7c5cd6',                          // cor no painel
+  variavelDoToken: 'COREDJA_TOKEN_RECEPCAO',
 }
 ```
 
-Reinicie o servidor e a área nova aparece na home, no painel e nos botões de
-"Falar com".
+Defina `COREDJA_TOKEN_RECEPCAO` no `.env.local` (e no painel da hospedagem, se
+estiver publicada) e reinicie. A área nova aparece na home e no painel.
 
 ---
 
@@ -259,6 +275,8 @@ acessam de qualquer lugar. O plano gratuito da Netlify dá conta.
 |---|---|
 | `COREDJA_STORAGE` | `firebase` |
 | `FIREBASE_CREDENCIAIS_JSON` | O conteúdo **inteiro** de `segredos/firebase-admin.json` |
+| `COREDJA_TOKEN_CANTINA` | Um segredo seu (letras e números) |
+| `COREDJA_TOKEN_KIDS` | Outro segredo seu |
 | `NEXT_PUBLIC_FIREBASE_API_KEY` | do `.env.local` |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | do `.env.local` |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | do `.env.local` |
