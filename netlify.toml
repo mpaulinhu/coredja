@@ -1,0 +1,18 @@
+# Configuração de publicação na Netlify.
+#
+# O plugin oficial do Next.js cuida do resto: detecta as rotas, empacota o
+# servidor e publica. Não é preciso configurar diretório de saída.
+#
+# As variáveis de ambiente NÃO ficam aqui — são cadastradas no painel da
+# Netlify (Site configuration → Environment variables), porque incluem a
+# credencial de administrador do Firebase, que não pode ir para o git.
+
+[build]
+  command = "pnpm build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  # A Netlify precisa de Node 20+ para o Next 16.
+  NODE_VERSION = "22"

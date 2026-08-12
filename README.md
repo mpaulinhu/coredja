@@ -169,25 +169,29 @@ Poder alternar existe por um motivo prático: se a internet cair no meio de um
 culto, troque para `sqlite`, reinicie, e os recados voltam a funcionar na
 hora. Os que estavam na nuvem continuam lá, esperando você voltar.
 
-### ⚠️ As imagens não estão na nuvem
+### Como as imagens são guardadas
 
-Mesmo com `COREDJA_STORAGE=firebase`, **as imagens continuam no disco deste
-PC**. Isso porque o Firebase Storage exige o plano pago (Blaze) e o projeto
-está no plano gratuito (Spark).
+Depende do modo:
 
-Na prática: se este PC for trocado ou a pasta `dados/` for perdida, os
-**recados sobrevivem** e os **banners não**. Onde havia imagem, a tela mostra
-"imagem não encontrada" em vez de quebrar.
+- **`sqlite`** — em `dados/uploads/`, no disco.
+- **`firebase`** — dentro do próprio recado, no Firestore.
 
-Se um dia isso incomodar, há dois caminhos: ativar o plano Blaze e mover as
-imagens para o Firebase Storage, ou manter o backup da pasta `dados/uploads/`.
+Guardar dentro do recado permite hospedar a plataforma: num servidor da
+internet o disco é descartável e some sem aviso, junto com qualquer arquivo
+gravado. O Firebase Storage resolveria isso melhor, mas exige o plano pago
+(Blaze) — e como o banner é baixado no mesmo dia e não precisa ficar guardado
+para sempre, embutir resolve sem custo.
+
+O limite é 1 MB por recado, então a imagem é reduzida no próprio celular antes
+de subir (`comprimir.ts`) — o que também faz o envio ser bem mais rápido no
+Wi-Fi da igreja. Se ainda assim passar do limite, o envio é recusado com uma
+mensagem explicando.
 
 ### Backup
 
-Com `COREDJA_STORAGE=firebase`, o Google já cuida dos recados. Falta só copiar
-a pasta `dados/uploads/`, que guarda as imagens.
+Com `COREDJA_STORAGE=firebase`, o Google cuida de tudo — recados e imagens.
 
-Com `COREDJA_STORAGE=sqlite`, copie a pasta `dados/` inteira — ela tem tudo.
+Com `COREDJA_STORAGE=sqlite`, copie a pasta `dados/` inteira.
 
 A pasta não vai para o git de propósito: são as mensagens reais da igreja.
 
@@ -211,19 +215,68 @@ projeto → Contas de serviço, e exclua a antiga em
 Para instalar em outro PC, baixe uma chave nova por esse mesmo caminho e
 salve como `segredos/firebase-admin.json`.
 
-### Por que o banco fica fechado
+### As regras de segurança
 
-As regras do Firestore estão em modo produção, o que significa
-`allow read, write: if false` — **ninguém entra pelo navegador**, nem para
-ler.
+Estão em [`firestore.rules`](firestore.rules): **leitura liberada, escrita
+bloqueada**.
 
-Isso funciona porque o navegador nunca fala com o Firestore direto: o celular
-da Cantina conversa com este servidor, e só o servidor conversa com o banco,
-usando a chave de administrador que ignora as regras.
+A leitura precisa estar aberta porque é o navegador que escuta o Firestore
+para receber os recados em tempo real. A escrita fica fechada para todos —
+todo envio passa pelo servidor, que usa a chave de administrador e ignora as
+regras. Ninguém cria, altera ou apaga recado direto no banco.
 
-É mais seguro do que abrir o banco e proteger com regras, porque não existe
-superfície pública nenhuma. O link secreto de cada área continua sendo
-conferido no servidor, como sempre foi.
+O `token` de cada área **não é gravado no Firestore**. Ele é o segredo do link
+de envio, e um banco de leitura aberta o exporia. Fica só em
+[`areas.ts`](src/lib/areas.ts) e é conferido no servidor.
+
+Para publicar mudanças nas regras: Console do Firebase → Firestore → aba
+**Regras** → colar o conteúdo de `firestore.rules` → **Publicar**.
+
+---
+
+## Publicar na internet (Netlify)
+
+Hospedar tira a dependência do PC ligado e do Wi-Fi da igreja: as áreas
+acessam de qualquer lugar. O plano gratuito da Netlify dá conta.
+
+### O que já está pronto
+
+- [`netlify.toml`](netlify.toml) com a configuração de build
+- A credencial pode vir de variável de ambiente, sem precisar do arquivo
+- O tempo real usa o Firestore, que funciona com vários servidores
+- As imagens vão embutidas no recado, sem depender de disco
+
+### Passo a passo
+
+1. Suba o projeto para um repositório no GitHub.
+2. Em [app.netlify.com](https://app.netlify.com), crie a conta (grátis) e
+   escolha **Add new site → Import an existing project**.
+3. Conecte o repositório. A Netlify lê o `netlify.toml` sozinha.
+4. Antes de publicar, cadastre as variáveis em **Site configuration →
+   Environment variables**:
+
+| Variável | Valor |
+|---|---|
+| `COREDJA_STORAGE` | `firebase` |
+| `FIREBASE_CREDENCIAIS_JSON` | O conteúdo **inteiro** de `segredos/firebase-admin.json` |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | do `.env.local` |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | do `.env.local` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | do `.env.local` |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | do `.env.local` |
+| `NEXT_PUBLIC_FIREBASE_SENDER_ID` | do `.env.local` |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | do `.env.local` |
+
+5. Publique. Sai um endereço como `coredja.netlify.app`.
+
+### O que muda quando está publicado
+
+**Os links viram públicos.** Hoje só quem está no Wi-Fi da igreja alcança a
+plataforma. Publicada, qualquer pessoa com o link de uma área pode mandar
+recado, de qualquer lugar do mundo. Continua sendo aceitável para o uso — mas
+se um link vazar num grupo, troque o `token` em
+[`areas.ts`](src/lib/areas.ts) e publique de novo.
+
+**O PC deixa de ser necessário.** Nada para ligar no domingo.
 
 ### Sobre índices
 
