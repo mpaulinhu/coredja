@@ -6,69 +6,66 @@ num painel que atualiza sozinho.
 
 ---
 
-## Como rodar
+## Como ligar
 
-Na primeira vez, instale as dependências:
+**Clique duas vezes em `Coredja.bat`.**
+
+Ele cuida de tudo: prepara o programa na primeira vez, monta quando o código
+muda, sobe o servidor, abre o painel no navegador e mostra os links dos
+celulares na tela.
+
+Uma janela preta vai abrir e ficar aberta. **Não feche enquanto estiver
+usando** — é ela que mantém a plataforma no ar. Pode minimizar.
+
+Para desligar: feche a janela.
+
+> **Atalho na área de trabalho:** clique com o botão direito em `Coredja.bat`
+> → *Enviar para* → *Área de trabalho (criar atalho)*. Aí é só clicar no ícone
+> todo domingo.
+
+### Se preferir pelo terminal
 
 ```bash
-pnpm install
-```
-
-E crie o arquivo de configuração a partir do modelo:
-
-```bash
+pnpm install          # só na primeira vez
 cp .env.example .env.local
-```
-
-Para usar no domingo:
-
-```bash
 pnpm build
 pnpm start
 ```
 
-O `pnpm start` é a versão rápida, para uso real. O `pnpm dev` é para quando
-estiver mexendo no código: ele recarrega sozinho a cada alteração, mas é mais
-lento.
+O `pnpm dev` existe para quando alguém estiver mexendo no código: recarrega
+sozinho a cada alteração, mas é mais lento que o `pnpm start`.
 
 ---
 
 ## Os endereços
 
-Com o servidor rodando, abra `http://localhost:3000` para ver a lista de
-links.
+O `Coredja.bat` mostra os três links prontos quando liga. Eles são:
 
 | Quem | Endereço |
 |---|---|
-| Audiovisual (você) | `/painel` |
-| Cantina | `/a/cantina-x7k2m9` |
-| Kids | `/a/kids-p4w8n3` |
+| Audiovisual (você, neste PC) | `localhost:3000/painel` |
+| Cantina (celular) | `<ip-do-pc>:3000/a/cantina-x7k2m9` |
+| Kids (celular ou PC da sala) | `<ip-do-pc>:3000/a/kids-p4w8n3` |
 
 ### Nos celulares das áreas
 
 Os celulares não conseguem abrir `localhost` — esse endereço significa "este
-computador aqui". Eles precisam do número do seu PC na rede da igreja.
+computador aqui". Por isso o `.bat` mostra o número do PC na rede, algo como
+`192.168.50.104`.
 
-Para descobrir esse número, rode no PC do audiovisual:
-
-```bash
-ipconfig
-```
-
-Procure por "Endereço IPv4", algo como `192.168.0.15`. O link da Cantina fica
-então:
-
-```
-http://192.168.0.15:3000/a/cantina-x7k2m9
-```
-
-Abra esse link no celular da Cantina e mande salvar na tela inicial. Vira um
+Abra o link no celular da área e mande **salvar na tela inicial**. Vira um
 ícone, e a pessoa não precisa digitar nada de novo.
 
 > **Se o número mudar.** Alguns roteadores trocam esse número de tempos em
-> tempos, e aí o link salvo para de funcionar. Se isso acontecer, dá para
-> fixar o número do PC nas configurações do roteador (procure por "IP fixo" ou
-> "DHCP reservation"). Vale fazer isso uma vez e esquecer.
+> tempos, e aí o link salvo para de funcionar. Se isso acontecer, o `.bat`
+> mostra o número novo — basta salvar o link de novo no celular. Para não
+> passar por isso, dá para fixar o número do PC nas configurações do roteador
+> (procure por "IP fixo" ou "DHCP reservation").
+
+> **Se o celular não abrir o link.** Confira se ele está no mesmo Wi-Fi do PC.
+> Se estiver e ainda assim não abrir, provavelmente é o Firewall do Windows
+> bloqueando: na primeira vez que o servidor sobe, o Windows costuma perguntar
+> se permite — e é preciso marcar **redes privadas**.
 
 ---
 
