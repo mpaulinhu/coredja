@@ -1,27 +1,15 @@
-import { store } from '@/lib/store';
+import { montarConversas } from '@/lib/conversas';
 import { PainelAudiovisual } from './PainelAudiovisual';
 
 /**
  * Painel do audiovisual.
  *
- * Fica aberto no monitor lateral durante o culto. Recebe os recados das áreas
- * em tempo real, com os urgentes no topo.
+ * Fica aberto no monitor lateral durante o culto. Uma conversa por área, com
+ * os recados chegando em tempo real.
  */
 
 export const dynamic = 'force-dynamic';
 
 export default async function PaginaPainel() {
-  const [areas, pendentes, historico] = await Promise.all([
-    store.listarAreas(),
-    store.listarPendentes(),
-    store.listarHistorico(50),
-  ]);
-
-  return (
-    <PainelAudiovisual
-      areasIniciais={areas}
-      pendentesIniciais={pendentes}
-      historicoInicial={historico}
-    />
-  );
+  return <PainelAudiovisual conversasIniciais={await montarConversas()} />;
 }
