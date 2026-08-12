@@ -75,14 +75,24 @@ Abra o link no celular da área e mande **salvar na tela inicial**. Vira um
 que não pode esperar, aperta **Urgente** antes. Se tiver um banner, aperta
 **Imagem** e escolhe do celular — até 4 imagens de 10 MB cada.
 
-**No audiovisual.** O painel fica aberto no monitor lateral. Os recados
-aparecem sozinhos, com os urgentes no topo e em vermelho. Toca um som quando
-chega um novo — dois tons para normal, três mais agudos para urgente.
+**No audiovisual.** O painel fica aberto no monitor lateral e funciona como um
+aplicativo de mensagem: à esquerda a lista de áreas, à direita a conversa da
+área escolhida.
 
-Cada recado tem **Marcar como resolvido**, que o tira da lista e manda para o
-**Histórico**. Se clicar errado, o botão **Reabrir** no histórico devolve.
+Cada área na lista mostra a última mensagem e um crachá com quantos recados
+estão pendentes — **vermelho quando há urgente**. Quem tem urgente sobe para o
+topo da lista, depois quem tem pendente, depois os mais recentes.
 
-Para falar com uma área, use os botões **Falar com: Cantina / Kids** no rodapé.
+Os recados chegam sozinhos, sem atualizar a página, e toca um som: dois tons
+para normal, três mais agudos para urgente.
+
+Dentro da conversa, os recados da área ficam à esquerda e os seus à direita.
+Cada recado da área tem **Marcar como resolvido**, que o some da conversa e
+diminui o crachá. O botão **Ver resolvidos** no topo traz de volta, e ali dá
+para **Reabrir** se você clicou errado.
+
+Para falar com a área, escreva no campo embaixo da conversa. **Enter envia**,
+Shift+Enter quebra linha.
 
 **Os banners.** A imagem aparece no cartão com um link **Baixar** embaixo.
 Você baixa e coloca no telão pelo Holyrics, como já faz hoje.
@@ -262,6 +272,7 @@ src/
 │  └─ useAlertaSonoro.ts  Som de recado novo
 └─ lib/
    ├─ types.ts            Contrato de dados (Area, Mensagem, Store)
+   ├─ conversas.ts        Monta a lista de conversas do painel
    ├─ store.ts            Escolhe o armazenamento (sqlite ou firebase)
    ├─ sqlite-store.ts     Implementação local
    ├─ db.ts               Conexão e schema do SQLite

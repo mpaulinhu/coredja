@@ -95,13 +95,31 @@ export const firebaseStore: Store = {
   async listarAreas() {
     await garantirSemeadura();
     const snap = await db().collection(COLECAO_AREAS).orderBy('nome').get();
+
+    // Se a coleção sumiu (limpeza manual, por exemplo), devolve o que está em
+    // areas.ts em vez de deixar o painel sem nenhuma área. O código é a fonte
+    // da verdade; o banco é só onde ele foi copiado.
+    if (snap.empty) {
+      return [...AREAS].sort((a, b) => a.nome.localeCompare(b.nome));
+    }
+
     return snap.docs.map((d) => d.data() as Area);
   },
 
   async buscarArea(slug) {
     await garantirSemeadura();
-    const doc = await db().collection(COLECAO_AREAS).doc(slug).get();
-    return doc.exists ? (doc.data() as Area) : null;
+    const ref = db().collection(COLECAO_AREAS).doc(slug);
+    const doc = await ref.get();
+    if (doc.exists) return doc.data() as Area;
+
+    // A área está em areas.ts mas não no banco: alguém limpou a coleção, ou a
+    // semeadura falhou. Regrava a partir do código, que é a fonte da verdade,
+    // em vez de recusar o acesso e exigir reiniciar o servidor.
+    const doCodigo = AREAS.find((a) => a.slug === slug);
+    if (!doCodigo) return null;
+
+    await ref.set(doCodigo);
+    return doCodigo;
   },
 
   async autenticarArea(slug, token) {

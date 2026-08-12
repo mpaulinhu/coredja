@@ -1,54 +1,47 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImagemAnexo } from '@/components/ImagemAnexo';
 import { useAlertaSonoro } from '@/hooks/useAlertaSonoro';
 import { useEventos } from '@/hooks/useEventos';
+import type { Conversa } from '@/lib/conversas';
 import { dataHora, hora, tempoDecorrido } from '@/lib/formatar';
-import type { Area, Mensagem } from '@/lib/types';
+import type { Mensagem } from '@/lib/types';
 
 /**
  * Painel do audiovisual.
  *
- * Fica num monitor lateral durante o culto. As decisões de layout partem
- * disso: cartões grandes, legíveis de longe, urgentes no topo e destacados,
- * e um som quando chega recado — porque quem opera a mesa não fica olhando
- * para esta tela.
+ * Uma conversa por área, como num aplicativo de mensagem: à esquerda a lista
+ * de áreas com o que está pendente em cada uma, à direita a conversa aberta.
+ * As respostas do audiovisual ficam dentro da conversa a que pertencem.
+ *
+ * Fica num monitor lateral durante o culto — daí os alvos grandes, o texto
+ * legível de longe, e o som quando chega recado, já que quem opera a mesa não
+ * fica olhando para esta tela.
  */
 
 interface Props {
-  areasIniciais: Area[];
-  pendentesIniciais: Mensagem[];
-  historicoInicial: Mensagem[];
+  conversasIniciais: Conversa[];
 }
 
-type Aba = 'pendentes' | 'historico';
-
-export function PainelAudiovisual({
-  areasIniciais,
-  pendentesIniciais,
-  historicoInicial,
-}: Props) {
-  const [areas, setAreas] = useState(areasIniciais);
-  const [pendentes, setPendentes] = useState(pendentesIniciais);
-  const [historico, setHistorico] = useState(historicoInicial);
-  const [aba, setAba] = useState<Aba>('pendentes');
+export function PainelAudiovisual({ conversasIniciais }: Props) {
+  const [conversas, setConversas] = useState(conversasIniciais);
+  const [abertaSlug, setAbertaSlug] = useState<string | null>(
+    conversasIniciais[0]?.area.slug ?? null,
+  );
   const [som, setSom] = useState(true);
-  const [respondendo, setRespondendo] = useState<Area | null>(null);
   const [conectado, setConectado] = useState(true);
+  const [mostrarResolvidos, setMostrarResolvidos] = useState(false);
 
   const { tocar, liberar } = useAlertaSonoro(som);
 
   // Guarda os identificadores já vistos para tocar o som só em recado
   // realmente novo — sem isso, resolver um recado dispararia o alerta.
   const conhecidos = useRef<Set<string>>(
-    new Set(pendentesIniciais.map((m) => m.id)),
+    new Set(conversasIniciais.flatMap((c) => c.mensagens.map((m) => m.id))),
   );
 
-  const porSlug = useMemo(
-    () => new Map(areas.map((area) => [area.slug, area])),
-    [areas],
-  );
+  const aberta = conversas.find((c) => c.area.slug === abertaSlug) ?? null;
 
   const recarregar = useCallback(async () => {
     try {
@@ -57,25 +50,20 @@ export function PainelAudiovisual({
       });
       if (!resposta.ok) return;
 
-      const dados = (await resposta.json()) as {
-        areas: Area[];
-        pendentes: Mensagem[];
-        historico: Mensagem[];
-      };
+      const dados = (await resposta.json()) as { conversas: Conversa[] };
+      const todas = dados.conversas.flatMap((c) => c.mensagens);
 
       // Toca apenas para recados vindos de área: a própria resposta do
       // audiovisual não deve alertar quem acabou de escrevê-la.
-      const novos = dados.pendentes.filter(
+      const novos = todas.filter(
         (m) => !conhecidos.current.has(m.id) && m.autor === 'area',
       );
       if (novos.length > 0) {
         tocar(novos.some((m) => m.prioridade === 'urgente'));
       }
-      conhecidos.current = new Set(dados.pendentes.map((m) => m.id));
+      conhecidos.current = new Set(todas.map((m) => m.id));
 
-      setAreas(dados.areas);
-      setPendentes(dados.pendentes);
-      setHistorico(dados.historico);
+      setConversas(dados.conversas);
       setConectado(true);
     } catch {
       setConectado(false);
@@ -101,9 +89,30 @@ export function PainelAudiovisual({
   async function mudarEstado(id: string, acao: 'resolver' | 'reabrir') {
     // Aplica na tela antes da resposta do servidor: o clique precisa parecer
     // instantâneo no meio do culto. O recarregar em seguida confirma.
-    if (acao === 'resolver') {
-      setPendentes((atuais) => atuais.filter((m) => m.id !== id));
-    }
+    setConversas((atuais) =>
+      atuais.map((conversa) => {
+        if (!conversa.mensagens.some((m) => m.id === id)) return conversa;
+
+        const mensagens = conversa.mensagens.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                resolvidaEm:
+                  acao === 'resolver' ? new Date().toISOString() : null,
+              }
+            : m,
+        );
+        const pendentes = mensagens.filter(
+          (m) => m.autor === 'area' && !m.resolvidaEm,
+        );
+        return {
+          ...conversa,
+          mensagens,
+          pendentes: pendentes.length,
+          temUrgente: pendentes.some((m) => m.prioridade === 'urgente'),
+        };
+      }),
+    );
 
     try {
       await fetch(`/api/painel/mensagens/${id}`, {
@@ -117,345 +126,348 @@ export function PainelAudiovisual({
     await recarregar();
   }
 
-  const urgentes = pendentes.filter((m) => m.prioridade === 'urgente').length;
+  const totalPendentes = conversas.reduce((soma, c) => soma + c.pendentes, 0);
 
-  // Layout em coluna de altura cheia: cabeçalho e barra de ações presos nas
-  // pontas, só a lista rola no meio. Com `sticky` numa página de altura livre,
-  // a barra de baixo flutuaria no meio dos cartões quando a lista fica longa.
   return (
     <div
       className="flex h-[100dvh] flex-col overflow-hidden bg-fundo"
       onClickCapture={liberar}
     >
-      <header className="shrink-0 border-b border-borda bg-fundo-elevado/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
-          <h1 className="text-xl font-bold tracking-tight text-texto">
-            Coredja
-          </h1>
-          <span className="text-sm text-texto-fraco">Audiovisual</span>
+      <header className="flex shrink-0 items-center gap-3 border-b border-borda bg-fundo-elevado px-5 py-3">
+        <h1 className="text-xl font-bold tracking-tight text-texto">Coredja</h1>
+        <span className="text-sm text-texto-fraco">Audiovisual</span>
 
-          {!conectado && (
-            <span className="rounded-full bg-urgente-fundo px-2.5 py-1 text-xs font-semibold text-urgente">
-              Sem conexão
-            </span>
-          )}
+        {totalPendentes > 0 && (
+          <span className="rounded-full bg-fundo-cartao px-2.5 py-1 text-xs font-semibold text-texto-suave">
+            {totalPendentes} pendente{totalPendentes > 1 ? 's' : ''}
+          </span>
+        )}
 
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSom((v) => !v)}
-              aria-pressed={som}
-              title={som ? 'Desligar som' : 'Ligar som'}
-              className="flex h-10 items-center gap-2 rounded-lg border border-borda bg-fundo-cartao px-3 text-sm text-texto-suave hover:bg-borda"
-            >
-              {som ? <IconeSom /> : <IconeSomMudo />}
-              {som ? 'Som ligado' : 'Som desligado'}
-            </button>
-          </div>
-        </div>
+        {!conectado && (
+          <span className="rounded-full bg-urgente-fundo px-2.5 py-1 text-xs font-semibold text-urgente">
+            Sem conexão
+          </span>
+        )}
 
-        <div className="mx-auto flex w-full max-w-6xl gap-1 px-5">
-          <BotaoAba
-            ativo={aba === 'pendentes'}
-            onClick={() => setAba('pendentes')}
-            rotulo="Recados"
-            contagem={pendentes.length}
-            destaque={urgentes > 0}
-          />
-          <BotaoAba
-            ativo={aba === 'historico'}
-            onClick={() => setAba('historico')}
-            rotulo="Histórico"
-            contagem={historico.length}
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => setSom((v) => !v)}
+          aria-pressed={som}
+          title={som ? 'Desligar som' : 'Ligar som'}
+          className="ml-auto flex h-10 items-center gap-2 rounded-lg border border-borda bg-fundo-cartao px-3 text-sm text-texto-suave hover:bg-borda"
+        >
+          {som ? <IconeSom /> : <IconeSomMudo />}
+          <span className="hidden sm:inline">
+            {som ? 'Som ligado' : 'Som desligado'}
+          </span>
+        </button>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 overflow-y-auto px-5 py-5">
-        {aba === 'pendentes' ? (
-          pendentes.length === 0 ? (
-            <VazioPendentes />
-          ) : (
-            <ul className="gap-3 md:columns-2 [&>li]:mb-3 [&>li]:break-inside-avoid">
-              {/* Colunas independentes em vez de grade: um cartão com banner
-                  é bem mais alto que um só de texto, e numa grade em linhas
-                  isso abriria vazios grandes ao lado dele. Aqui cada coluna
-                  se preenche sozinha, e os urgentes entram primeiro. */}
-              {pendentes.map((mensagem) => (
-                <CartaoRecado
-                  key={mensagem.id}
-                  mensagem={mensagem}
-                  area={porSlug.get(mensagem.areaSlug)}
-                  aoResolver={() => mudarEstado(mensagem.id, 'resolver')}
+      <div className="flex min-h-0 flex-1">
+        <ListaDeConversas
+          conversas={conversas}
+          abertaSlug={abertaSlug}
+          aoEscolher={setAbertaSlug}
+        />
+
+        {aberta ? (
+          <PainelDaConversa
+            conversa={aberta}
+            mostrarResolvidos={mostrarResolvidos}
+            aoAlternarResolvidos={() => setMostrarResolvidos((v) => !v)}
+            aoMudarEstado={mudarEstado}
+            aoEnviar={recarregar}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center p-8 text-center">
+            <p className="text-texto-fraco">
+              Escolha uma área para ver a conversa.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Coluna da esquerda: uma linha por área, com o que está pendente nela. */
+function ListaDeConversas({
+  conversas,
+  abertaSlug,
+  aoEscolher,
+}: {
+  conversas: Conversa[];
+  abertaSlug: string | null;
+  aoEscolher: (slug: string) => void;
+}) {
+  return (
+    <nav
+      aria-label="Áreas"
+      className="w-[15rem] shrink-0 overflow-y-auto border-r border-borda bg-fundo-elevado md:w-[19rem]"
+    >
+      <ul>
+        {conversas.map((conversa) => {
+          const ativa = conversa.area.slug === abertaSlug;
+          return (
+            <li key={conversa.area.slug}>
+              <button
+                type="button"
+                onClick={() => aoEscolher(conversa.area.slug)}
+                aria-current={ativa ? 'true' : undefined}
+                className="flex w-full items-center gap-3 border-b border-borda px-4 py-3.5 text-left transition-colors hover:bg-fundo-cartao"
+                style={{
+                  background: ativa ? 'var(--fundo-cartao)' : undefined,
+                  boxShadow: ativa
+                    ? `inset 3px 0 0 ${conversa.area.cor}`
+                    : undefined,
+                }}
+              >
+                <span
+                  className="h-9 w-9 shrink-0 rounded-full"
+                  style={{ background: conversa.area.cor }}
+                  aria-hidden="true"
                 />
-              ))}
-            </ul>
-          )
-        ) : historico.length === 0 ? (
+
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate font-semibold text-texto">
+                      {conversa.area.nome}
+                    </span>
+                    {conversa.ultima && (
+                      <span className="ml-auto shrink-0 text-[11px] text-texto-fraco">
+                        {hora(conversa.ultima.criadaEm)}
+                      </span>
+                    )}
+                  </span>
+
+                  <span className="mt-0.5 flex items-center gap-2">
+                    <span className="truncate text-xs text-texto-fraco">
+                      {conversa.ultima
+                        ? `${
+                            conversa.ultima.autor === 'audiovisual' ? 'Você: ' : ''
+                          }${
+                            conversa.ultima.texto ||
+                            (conversa.ultima.anexos.length > 0 ? '📷 imagem' : '')
+                          }`
+                        : 'Nenhum recado ainda'}
+                    </span>
+
+                    {conversa.pendentes > 0 && (
+                      <span
+                        className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
+                        style={{
+                          background: conversa.temUrgente
+                            ? 'var(--urgente)'
+                            : 'var(--texto-fraco)',
+                        }}
+                        title={
+                          conversa.temUrgente
+                            ? 'Tem recado urgente'
+                            : 'Recados pendentes'
+                        }
+                      >
+                        {conversa.pendentes}
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/** Coluna da direita: a conversa aberta, com o campo de resposta embaixo. */
+function PainelDaConversa({
+  conversa,
+  mostrarResolvidos,
+  aoAlternarResolvidos,
+  aoMudarEstado,
+  aoEnviar,
+}: {
+  conversa: Conversa;
+  mostrarResolvidos: boolean;
+  aoAlternarResolvidos: () => void;
+  aoMudarEstado: (id: string, acao: 'resolver' | 'reabrir') => Promise<void>;
+  aoEnviar: () => Promise<void>;
+}) {
+  const fim = useRef<HTMLDivElement>(null);
+
+  const visiveis = mostrarResolvidos
+    ? conversa.mensagens
+    : conversa.mensagens.filter((m) => m.autor === 'audiovisual' || !m.resolvidaEm);
+
+  const ocultos = conversa.mensagens.length - visiveis.length;
+
+  // Rola para o fim ao trocar de área ou chegar mensagem nova.
+  useEffect(() => {
+    fim.current?.scrollIntoView({ block: 'end' });
+  }, [conversa.area.slug, conversa.mensagens.length, mostrarResolvidos]);
+
+  return (
+    <section className="flex min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-3 border-b border-borda px-5 py-3">
+        <span
+          className="h-3 w-3 rounded-full"
+          style={{ background: conversa.area.cor }}
+          aria-hidden="true"
+        />
+        <h2 className="text-lg font-bold text-texto">{conversa.area.nome}</h2>
+
+        {conversa.pendentes > 0 && (
+          <span className="text-sm text-texto-fraco">
+            {conversa.pendentes} pendente{conversa.pendentes > 1 ? 's' : ''}
+          </span>
+        )}
+
+        {(ocultos > 0 || mostrarResolvidos) && (
+          <button
+            type="button"
+            onClick={aoAlternarResolvidos}
+            className="ml-auto rounded-lg border border-borda px-3 py-1.5 text-xs font-medium text-texto-suave hover:bg-borda"
+          >
+            {mostrarResolvidos
+              ? 'Ocultar resolvidos'
+              : `Ver resolvidos (${ocultos})`}
+          </button>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {visiveis.length === 0 ? (
           <p className="py-16 text-center text-sm text-texto-fraco">
-            Nada no histórico ainda.
+            {conversa.mensagens.length === 0
+              ? `Nenhum recado da ${conversa.area.nome} ainda.`
+              : 'Tudo resolvido por aqui.'}
           </p>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {historico.map((mensagem) => (
-              <LinhaHistorico
+          <ul className="flex flex-col gap-3">
+            {/* Largura cheia, sem max-w centralizado: os balões precisam
+                encostar nas bordas para a distinção esquerda/direita ficar
+                evidente de longe, que é como esta tela é lida. */}
+            {visiveis.map((mensagem) => (
+              <BalaoDoPainel
                 key={mensagem.id}
                 mensagem={mensagem}
-                area={porSlug.get(mensagem.areaSlug)}
-                aoReabrir={() => mudarEstado(mensagem.id, 'reabrir')}
+                aoMudarEstado={aoMudarEstado}
               />
             ))}
           </ul>
         )}
-      </main>
-
-      {/* Barra fixa para iniciar uma conversa com qualquer área. */}
-      <div className="shrink-0 border-t border-borda bg-fundo-elevado/95 px-5 py-3 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2">
-          <span className="text-sm text-texto-fraco">Falar com:</span>
-          {areas.map((area) => (
-            <button
-              key={area.slug}
-              type="button"
-              onClick={() => setRespondendo(area)}
-              className="flex h-10 items-center gap-2 rounded-lg border border-borda bg-fundo-cartao px-3 text-sm font-medium text-texto hover:bg-borda"
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: area.cor }}
-                aria-hidden="true"
-              />
-              {area.nome}
-            </button>
-          ))}
-        </div>
+        <div ref={fim} />
       </div>
 
-      {respondendo && (
-        <ModalResposta
-          area={respondendo}
-          aoFechar={() => setRespondendo(null)}
-          aoEnviar={recarregar}
-        />
-      )}
-    </div>
+      {/* A key faz o React recriar o campo ao trocar de área, o que zera o
+          rascunho — sem isso, um texto começado para a Cantina apareceria na
+          conversa do Kids. */}
+      <CampoDeResposta
+        key={conversa.area.slug}
+        areaSlug={conversa.area.slug}
+        aoEnviar={aoEnviar}
+      />
+    </section>
   );
 }
 
-function BotaoAba({
-  ativo,
-  onClick,
-  rotulo,
-  contagem,
-  destaque,
+/** Um recado dentro da conversa. Da área à esquerda, seu à direita. */
+function BalaoDoPainel({
+  mensagem,
+  aoMudarEstado,
 }: {
-  ativo: boolean;
-  onClick: () => void;
-  rotulo: string;
-  contagem: number;
-  destaque?: boolean;
+  mensagem: Mensagem;
+  aoMudarEstado: (id: string, acao: 'resolver' | 'reabrir') => Promise<void>;
 }) {
+  const daArea = mensagem.autor === 'area';
+  const urgente = mensagem.prioridade === 'urgente';
+  const resolvido = Boolean(mensagem.resolvidaEm);
+  const pulsa = daArea && urgente && !resolvido;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="relative flex items-center gap-2 px-3 py-2.5 text-sm font-semibold transition-colors"
-      style={{
-        color: ativo ? 'var(--texto)' : 'var(--texto-fraco)',
-        boxShadow: ativo ? 'inset 0 -2px 0 var(--acento)' : 'none',
-      }}
-    >
-      {rotulo}
-      <span
-        className="rounded-full px-2 py-0.5 text-xs font-bold"
+    <li className={`flex ${daArea ? 'justify-start' : 'justify-end'}`}>
+      <div
+        className={`entrada max-w-[min(85%,44rem)] rounded-2xl border p-3.5 ${
+          pulsa ? 'pulso-urgente' : ''
+        }`}
         style={{
-          background: destaque ? 'var(--urgente)' : 'var(--fundo-cartao)',
-          color: destaque ? '#fff' : 'var(--texto-suave)',
+          background:
+            daArea && urgente && !resolvido
+              ? 'var(--urgente-fundo)'
+              : 'var(--fundo-cartao)',
+          borderColor:
+            daArea && urgente && !resolvido ? 'var(--urgente)' : 'var(--borda)',
+          opacity: resolvido ? 0.62 : 1,
         }}
       >
-        {contagem}
-      </span>
-    </button>
-  );
-}
-
-function VazioPendentes() {
-  return (
-    <div className="py-20 text-center">
-      <p className="text-lg font-medium text-texto-suave">
-        Nenhum recado pendente
-      </p>
-      <p className="mt-1 text-sm text-texto-fraco">
-        Os recados da Cantina e do Kids aparecem aqui automaticamente.
-      </p>
-    </div>
-  );
-}
-
-function CartaoRecado({
-  mensagem,
-  area,
-  aoResolver,
-}: {
-  mensagem: Mensagem;
-  area?: Area;
-  aoResolver: () => void;
-}) {
-  const urgente = mensagem.prioridade === 'urgente';
-  const doAudiovisual = mensagem.autor === 'audiovisual';
-
-  return (
-    <li
-      className={`entrada rounded-xl border p-4 ${
-        urgente ? 'pulso-urgente' : ''
-      }`}
-      style={{
-        background: urgente ? 'var(--urgente-fundo)' : 'var(--fundo-cartao)',
-        borderColor: urgente ? 'var(--urgente)' : 'var(--borda)',
-      }}
-    >
-      <div className="mb-2 flex items-center gap-2">
-        <span
-          className="h-3 w-3 shrink-0 rounded-full"
-          style={{ background: area?.cor ?? 'var(--texto-fraco)' }}
-          aria-hidden="true"
-        />
-        <span className="text-base font-bold text-texto">
-          {area?.nome ?? mensagem.areaSlug}
-        </span>
-
-        {urgente && (
-          <span className="rounded-md bg-urgente px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
-            Urgente
-          </span>
-        )}
-
-        {doAudiovisual && (
-          <span className="rounded-md border border-borda-forte px-2 py-0.5 text-xs font-semibold text-texto-suave">
-            Você enviou
-          </span>
-        )}
-
-        <span className="ml-auto whitespace-nowrap text-sm text-texto-fraco">
-          {tempoDecorrido(mensagem.criadaEm)} · {hora(mensagem.criadaEm)}
-        </span>
-      </div>
-
-      {mensagem.texto && (
-        <p className="whitespace-pre-wrap break-words text-[17px] leading-relaxed text-texto">
-          {mensagem.texto}
-        </p>
-      )}
-
-      {mensagem.anexos.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {mensagem.anexos.map((anexo) => (
-            <li key={anexo.id}>
-              <ImagemAnexo anexo={anexo} tamanho="h-32 w-32" mostrarDownload />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <button
-        type="button"
-        onClick={aoResolver}
-        className="mt-4 h-11 w-full rounded-lg border border-borda-forte bg-fundo-elevado text-sm font-semibold text-texto hover:bg-borda"
-      >
-        Marcar como resolvido
-      </button>
-    </li>
-  );
-}
-
-function LinhaHistorico({
-  mensagem,
-  area,
-  aoReabrir,
-}: {
-  mensagem: Mensagem;
-  area?: Area;
-  aoReabrir: () => void;
-}) {
-  return (
-    <li className="flex items-start gap-3 rounded-lg border border-borda bg-fundo-cartao px-4 py-3">
-      <span
-        className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
-        style={{ background: area?.cor ?? 'var(--texto-fraco)' }}
-        aria-hidden="true"
-      />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-texto-suave">
-            {area?.nome ?? mensagem.areaSlug}
-          </span>
-          {mensagem.prioridade === 'urgente' && (
-            <span className="text-xs font-bold uppercase text-urgente">
+        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+          {urgente && daArea && (
+            <span className="rounded-md bg-urgente px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
               Urgente
             </span>
           )}
-          {mensagem.autor === 'audiovisual' && (
-            <span className="text-xs text-texto-fraco">você enviou</span>
+          {!daArea && (
+            <span className="text-xs font-semibold text-acento">Você</span>
           )}
-          <span className="text-xs text-texto-fraco">
-            {dataHora(mensagem.criadaEm)}
+          {resolvido && (
+            <span className="text-[11px] font-medium text-sucesso">
+              ✓ resolvido
+            </span>
+          )}
+          <span
+            className="ml-auto whitespace-nowrap text-xs text-texto-fraco"
+            title={dataHora(mensagem.criadaEm)}
+          >
+            {tempoDecorrido(mensagem.criadaEm)} · {hora(mensagem.criadaEm)}
           </span>
         </div>
 
         {mensagem.texto && (
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-texto">
+          <p className="whitespace-pre-wrap break-words text-[16px] leading-relaxed text-texto">
             {mensagem.texto}
           </p>
         )}
 
         {mensagem.anexos.length > 0 && (
-          <ul className="mt-2 flex flex-wrap gap-2">
+          <ul className="mt-2.5 flex flex-wrap gap-2">
             {mensagem.anexos.map((anexo) => (
               <li key={anexo.id}>
-                <ImagemAnexo anexo={anexo} tamanho="h-16 w-16" />
+                <ImagemAnexo anexo={anexo} tamanho="h-32 w-32" mostrarDownload />
               </li>
             ))}
           </ul>
         )}
-      </div>
 
-      <button
-        type="button"
-        onClick={aoReabrir}
-        className="shrink-0 rounded-lg border border-borda px-3 py-1.5 text-xs font-medium text-texto-suave hover:bg-borda"
-      >
-        Reabrir
-      </button>
+        {/* Só recado de área se resolve: resposta sua não é tarefa sua. */}
+        {daArea && (
+          <button
+            type="button"
+            onClick={() =>
+              aoMudarEstado(mensagem.id, resolvido ? 'reabrir' : 'resolver')
+            }
+            className="mt-3 h-10 w-full rounded-lg border border-borda-forte bg-fundo-elevado text-sm font-semibold text-texto hover:bg-borda"
+          >
+            {resolvido ? 'Reabrir' : 'Marcar como resolvido'}
+          </button>
+        )}
+      </div>
     </li>
   );
 }
 
-function ModalResposta({
-  area,
-  aoFechar,
+/** Campo de resposta, fixo no rodapé da conversa aberta. */
+function CampoDeResposta({
+  areaSlug,
   aoEnviar,
 }: {
-  area: Area;
-  aoFechar: () => void;
+  areaSlug: string;
   aoEnviar: () => Promise<void>;
 }) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    campo.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') aoFechar();
-    };
-    window.addEventListener('keydown', aoTeclar);
-    return () => window.removeEventListener('keydown', aoTeclar);
-  }, [aoFechar]);
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
@@ -468,7 +480,7 @@ function ModalResposta({
       const resposta = await fetch('/api/painel/mensagens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ areaSlug: area.slug, texto: conteudo }),
+        body: JSON.stringify({ areaSlug, texto: conteudo }),
       });
       if (!resposta.ok) {
         const dados = (await resposta.json().catch(() => ({}))) as {
@@ -477,8 +489,9 @@ function ModalResposta({
         setErro(dados.erro ?? 'Não foi possível enviar.');
         return;
       }
+      setTexto('');
       await aoEnviar();
-      aoFechar();
+      campo.current?.focus();
     } catch {
       setErro('Sem conexão. Tente de novo.');
     } finally {
@@ -487,65 +500,49 @@ function ModalResposta({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4"
-      onClick={aoFechar}
-      role="presentation"
+    <form
+      onSubmit={enviar}
+      className="shrink-0 border-t border-borda bg-fundo-elevado px-5 py-3"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Mensagem para ${area.nome}`}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl border border-borda bg-fundo-elevado p-5"
-      >
-        <div className="mb-3 flex items-center gap-2">
-          <span
-            className="h-3 w-3 rounded-full"
-            style={{ background: area.cor }}
-            aria-hidden="true"
-          />
-          <h2 className="text-lg font-bold text-texto">
-            Mensagem para {area.nome}
-          </h2>
-        </div>
+      <div className="mx-auto max-w-3xl">
+        {erro && (
+          <p role="alert" className="mb-2 text-sm text-urgente">
+            {erro}
+          </p>
+        )}
 
-        <form onSubmit={enviar}>
+        <div className="flex items-end gap-2">
+          <label htmlFor="resposta" className="sr-only">
+            Mensagem
+          </label>
           <textarea
+            id="resposta"
             ref={campo}
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            rows={4}
-            placeholder={`Ex: qual o preço da coxinha?`}
-            className="w-full resize-none rounded-xl border border-borda bg-fundo-cartao px-3 py-3 text-[15px] text-texto placeholder:text-texto-fraco"
+            onKeyDown={(e) => {
+              // Enter envia; Shift+Enter quebra linha. Numa conversa rápida,
+              // ter de mirar no botão a cada mensagem atrasa.
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void enviar(e);
+              }
+            }}
+            rows={1}
+            placeholder="Escreva uma mensagem…"
+            className="max-h-32 min-h-[3rem] w-full resize-y rounded-xl border border-borda bg-fundo-cartao px-3 py-3 text-[15px] text-texto placeholder:text-texto-fraco"
           />
-
-          {erro && (
-            <p role="alert" className="mt-2 text-sm text-urgente">
-              {erro}
-            </p>
-          )}
-
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              onClick={aoFechar}
-              className="h-11 flex-1 rounded-lg border border-borda text-sm font-medium text-texto-suave hover:bg-borda"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={enviando || !texto.trim()}
-              className="h-11 flex-1 rounded-lg text-sm font-bold text-white disabled:opacity-50"
-              style={{ background: 'var(--acento)' }}
-            >
-              {enviando ? 'Enviando…' : 'Enviar'}
-            </button>
-          </div>
-        </form>
+          <button
+            type="submit"
+            disabled={enviando || !texto.trim()}
+            className="h-12 shrink-0 rounded-xl px-5 text-sm font-bold text-white disabled:opacity-50"
+            style={{ background: 'var(--acento)' }}
+          >
+            {enviando ? 'Enviando…' : 'Enviar'}
+          </button>
+        </div>
       </div>
-    </div>
+    </form>
   );
 }
 

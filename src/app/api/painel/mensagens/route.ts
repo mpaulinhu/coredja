@@ -1,3 +1,4 @@
+import { montarConversas } from '@/lib/conversas';
 import { publicar } from '@/lib/eventos';
 import { TAMANHO_MAXIMO_TEXTO } from '@/lib/limites';
 import { store } from '@/lib/store';
@@ -9,20 +10,9 @@ import type { Prioridade } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-/** Pendentes, histórico e áreas — tudo que o painel precisa para desenhar. */
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const limiteHistorico = Number(url.searchParams.get('historico') ?? '50');
-
-  const [areas, pendentes, historico] = await Promise.all([
-    store.listarAreas(),
-    store.listarPendentes(),
-    store.listarHistorico(
-      Number.isFinite(limiteHistorico) ? limiteHistorico : 50,
-    ),
-  ]);
-
-  return Response.json({ areas, pendentes, historico });
+/** As conversas, uma por área, com tudo que o painel precisa para desenhar. */
+export async function GET() {
+  return Response.json({ conversas: await montarConversas() });
 }
 
 /** Resposta do audiovisual para uma área. */
