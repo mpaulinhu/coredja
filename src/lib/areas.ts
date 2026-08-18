@@ -75,6 +75,22 @@ function tokenDaArea(definicao: DefinicaoDeArea): string {
  * Só o servidor importa este arquivo — os tokens nunca chegam ao navegador
  * nem ao Firestore.
  */
+/**
+ * O slug não pode conter hífen: ele é o que vem antes do primeiro hífen no
+ * link da área (ver `separarChaveDeAcesso`). Um slug com hífen faria a área
+ * nunca ser encontrada, com um 404 silencioso e difícil de rastrear — então
+ * o erro estoura aqui, ao subir, em vez de só na hora de abrir o link.
+ */
+for (const definicao of DEFINICOES) {
+  if (definicao.slug.includes('-')) {
+    throw new Error(
+      `O slug "${definicao.slug}" contém hífen, e isso quebraria o link da ` +
+        `área "${definicao.nome}". ` +
+        'Use um slug sem hífen (ex: "kidssala2" no lugar de "kids-sala-2").',
+    );
+  }
+}
+
 export const AREAS: Area[] = DEFINICOES.map((definicao) => ({
   slug: definicao.slug,
   nome: definicao.nome,
@@ -90,13 +106,19 @@ export function caminhoDaArea(area: Area): string {
 /**
  * Separa o parâmetro de URL `{slug}-{token}` em suas duas partes.
  *
- * Divide no último hífen, e não no primeiro, para que slugs compostos
- * (ex: "kids-sala-2") continuem funcionando.
+ * Divide no PRIMEIRO hífen, porque o token é gerado aleatoriamente e pode
+ * conter hífen (o alfabeto padrão do `nanoid` inclui `-` e `_`). Cortar no
+ * último hífen levaria parte do token para dentro do slug, e a área não
+ * seria encontrada — era o que acontecia com um dos tokens em uso.
+ *
+ * Em troca, os slugs não podem conter hífen. São poucos e definidos aqui em
+ * código (`DEFINICOES` acima), então isso é fácil de garantir — ao contrário
+ * do token, que é sorteado.
  */
 export function separarChaveDeAcesso(
   chave: string,
 ): { slug: string; token: string } | null {
-  const corte = chave.lastIndexOf('-');
+  const corte = chave.indexOf('-');
   if (corte <= 0 || corte === chave.length - 1) return null;
   return {
     slug: chave.slice(0, corte),
