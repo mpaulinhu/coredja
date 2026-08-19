@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { escutarSessao, sair } from '@/lib/auth-cliente';
+import { ModalTrocarSenha } from './ModalTrocarSenha';
 
 /**
  * Barra a entrada nas telas internas para quem não está logado.
@@ -21,6 +22,7 @@ export function ExigeLogin({ children }: { children: ReactNode }) {
     'verificando',
   );
   const [email, setEmail] = useState<string | null>(null);
+  const [trocandoSenha, setTrocandoSenha] = useState(false);
 
   useEffect(() => {
     return escutarSessao((usuario) => {
@@ -46,15 +48,25 @@ export function ExigeLogin({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-borda px-5 py-2.5 text-xs text-texto-fraco">
         <span>{email}</span>
-        <button
-          type="button"
-          onClick={() => sair()}
-          className="text-texto-suave hover:text-texto"
-        >
-          Sair
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setTrocandoSenha(true)}
+            className="text-texto-suave hover:text-texto"
+          >
+            Trocar senha
+          </button>
+          <button
+            type="button"
+            onClick={() => sair()}
+            className="text-texto-suave hover:text-texto"
+          >
+            Sair
+          </button>
+        </div>
       </div>
       <div className="min-h-0 flex-1">{children}</div>
+      {trocandoSenha && <ModalTrocarSenha aoFechar={() => setTrocandoSenha(false)} />}
     </div>
   );
 }

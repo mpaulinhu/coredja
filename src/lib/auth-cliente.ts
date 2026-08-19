@@ -6,6 +6,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
   type Auth,
   type User,
 } from 'firebase/auth';
@@ -48,6 +49,17 @@ export async function entrar(email: string, senha: string): Promise<User> {
 
 export async function sair(): Promise<void> {
   await signOut(auth());
+}
+
+/**
+ * Troca a senha de quem está logado agora. O Firebase exige um login
+ * "recente" para isso (`auth/requires-recent-login`) — quem entrou há muito
+ * tempo precisa sair e entrar de novo antes de conseguir trocar.
+ */
+export async function trocarSenha(novaSenha: string): Promise<void> {
+  const usuario = auth().currentUser;
+  if (!usuario) throw new Error('Ninguém logado.');
+  await updatePassword(usuario, novaSenha);
 }
 
 /**
