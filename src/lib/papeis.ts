@@ -21,58 +21,104 @@
  */
 
 /**
- * Os cinco papéis do Coredja publicado, do mais para o menos amplo.
+ * Os cargos do Coredja publicado, do mais para o menos amplo. É uma
+ * hierarquia de cargo único (como `datametria_super_admin > ... > viewer` do
+ * CoreHub): cada pessoa tem UM cargo, e ele já inclui tudo que os cargos
+ * abaixo dele fazem — não precisa marcar vários.
  *
- * - `admin`: gerencia quem tem conta e o que cada pessoa pode ver — a única
- *   coisa que o admin faz é cuidar de gente, não de conteúdo do dia a dia.
- * - `lider`: monta a ordem do culto e os avisos.
- * - `coordenador`: monta a escala do time.
+ * - `admin`: gerencia quem tem conta e o que cada pessoa pode ver, mais tudo
+ *   que Líder, Coordenador e Operador fazem.
+ * - `lider`: monta a ordem do culto e os avisos, mais tudo que Coordenador e
+ *   Operador fazem.
+ * - `coordenador`: monta a escala do time, mais tudo que Operador faz.
  * - `operador`: só executa no domingo — avança a ordem, publica o aviso no
  *   telão, marca presença. Não edita o que foi preparado na semana.
- * - `area`: não é bem um papel de pessoa — existe aqui só para o código que
+ * - `area`: não é um cargo de pessoa — existe aqui só para o código que
  *   confere permissão poder tratar link-de-área e login-de-pessoa de forma
- *   parecida quando fizer sentido. A maioria das checagens não vai usar isto.
+ *   parecida quando fizer sentido. Fica fora da hierarquia numérica abaixo.
  */
 export type Papel = 'admin' | 'lider' | 'coordenador' | 'operador' | 'area';
 
 /**
+ * Nível numérico de cada cargo de pessoa — quanto menor, mais amplo. Não
+ * inclui `area`, que não é um cargo hierárquico.
+ */
+export const NIVEL_PAPEL: Record<Exclude<Papel, 'area'>, number> = {
+  admin: 0,
+  lider: 1,
+  coordenador: 2,
+  operador: 3,
+};
+
+/**
  * Uma pessoa com login no Coredja.
  *
- * `papeis` é uma lista, não um valor só: numa igreja pequena a mesma pessoa
- * costuma acumular funções (ex: quem lidera também administra o acesso dos
- * outros). Uma pessoa tem uma ação liberada se QUALQUER papel na lista
- * permitir — ver `podeFazer`.
+ * `departamento` e `areasVisiveis` convivem como campos distintos e cobrem
+ * coisas diferentes:
  *
- * `areasVisiveis` é só para a tela de Recados — controla quais conversas
- * (Cantina, Kids, ...) a pessoa enxerga no Painel. Vazio ou ausente
- * significa nenhuma área liberada, não "todas": é mais seguro que uma
- * pessoa nova comece sem ver nada e o admin libere explicitamente, do que
- * ela nascer vendo tudo por engano numa lista esquecida.
+ * - `departamento` é o pertencimento — de qual departamento a pessoa fala
+ *   quando escreve no Painel (ver `remetente` em `types.ts`). Seleção única.
+ * - `areasVisiveis` é COM QUEM ela pode conversar: os departamentos com quem
+ *   o admin liberou abrir conversa. Cantina com `['audiovisual','kids']` tem
+ *   duas conversas — Cantina ↔ Audiovisual e Cantina ↔ Kids — e em ambas ela
+ *   escreve assinando "Cantina". Não dá acesso a conversas de terceiros: a
+ *   conversa Kids ↔ Audiovisual não é dela e não aparece.
+ *
+ * Vazio ou ausente significa que ela ainda não pode falar com ninguém, não
+ * "pode falar com todos": é mais seguro que uma pessoa nova comece sem
+ * alcance e o admin libere explicitamente.
  */
 export interface Pessoa {
   /** UID do Firebase Authentication — é também o id do documento. */
   uid: string;
   nome: string;
   email: string;
-  papeis: Papel[];
-  /** Slugs das áreas (ver `areas.ts`) cujos recados esta pessoa pode ver. */
+  papel: Papel;
+  /** Slug do departamento (ver `types.ts`) a que esta pessoa pertence. */
+  departamento?: string;
+  /** Slugs dos departamentos com quem esta pessoa pode abrir conversa. */
   areasVisiveis?: string[];
 }
 
 /**
- * O que cada papel pode fazer, numa tabela — em vez de `if papel === ...`
- * espalhado pelas rotas. Adicionar uma ação nova é adicionar uma linha aqui,
- * não caçar todo lugar que checa papel.
+ * Com quais departamentos esta pessoa pode conversar — os que o admin liberou
+ * na tela de Usuários.
+ *
+ * `todos` é a lista de departamentos existentes: admin fala com qualquer um
+ * sem precisar de liberação explícita, já que é ele quem administra o alcance
+ * dos outros.
  */
-const PERMISSOES: Record<Papel, readonly string[]> = {
-  admin: ['pessoas:escrever'],
+export function podeConversarCom(pessoa: Pessoa, todos: string[]): string[] {
+  const liberados = pessoa.papel === 'admin' ? todos : (pessoa.areasVisiveis ?? []);
+  return liberados.filter((slug) => slug !== pessoa.departamento);
+}
+
+/** O que cada cargo ganha por si só, antes de herdar dos cargos abaixo. */
+const PERMISSOES_PROPRIAS: Record<Exclude<Papel, 'area'>, readonly string[]> = {
+  // 'departamentos:escrever' é exclusiva de admin — mesmo padrão de
+  // 'pessoas:escrever': não herda para os demais cargos.
+  admin: ['pessoas:escrever', 'departamentos:escrever'],
   lider: ['culto:escrever', 'avisos:escrever'],
   coordenador: ['escala:escrever'],
   operador: ['culto:avancar', 'avisos:publicar', 'escala:presenca'],
+};
+
+/** Permissões efetivas de cada cargo, já com a herança dos cargos abaixo somada. */
+const CARGOS = Object.keys(NIVEL_PAPEL) as Exclude<Papel, 'area'>[];
+function permissoesHerdadas(papel: Exclude<Papel, 'area'>): readonly string[] {
+  return CARGOS.filter((outro) => NIVEL_PAPEL[outro] >= NIVEL_PAPEL[papel]).flatMap(
+    (outro) => PERMISSOES_PROPRIAS[outro],
+  );
+}
+const PERMISSOES: Record<Papel, readonly string[]> = {
+  admin: permissoesHerdadas('admin'),
+  lider: permissoesHerdadas('lider'),
+  coordenador: permissoesHerdadas('coordenador'),
+  operador: permissoesHerdadas('operador'),
   area: [],
 };
 
-/** Se algum dos papéis da pessoa tem permissão para a ação. */
-export function podeFazer(papeis: Papel[], acao: string): boolean {
-  return papeis.some((papel) => PERMISSOES[papel]?.includes(acao) ?? false);
+/** Se o cargo da pessoa (ou algum cargo que ele herda) tem permissão para a ação. */
+export function podeFazer(papel: Papel, acao: string): boolean {
+  return PERMISSOES[papel]?.includes(acao) ?? false;
 }

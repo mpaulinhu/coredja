@@ -28,7 +28,8 @@ function auth() {
 export interface NovaPessoa {
   nome: string;
   email: string;
-  papeis: Papel[];
+  papel: Papel;
+  departamento?: string;
   areasVisiveis: string[];
 }
 
@@ -37,14 +38,13 @@ export interface PessoaConvidada extends Pessoa {
   senhaTemporaria: string;
 }
 
-/** Gera uma senha temporária legível — 4 blocos de 4 caracteres, sem 0/O/1/l. */
-function senhaAleatoria(): string {
-  const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const blocos = Array.from({ length: 4 }, () =>
-    Array.from({ length: 4 }, () => alfabeto[Math.floor(Math.random() * alfabeto.length)]).join(''),
-  );
-  return blocos.join('-');
-}
+/**
+ * Senha padrão de toda conta nova — igreja pequena, uso interno, prioridade
+ * é simplicidade de convidar sobre força de senha. Mínimo aceito pelo
+ * Firebase Auth é 6 caracteres; a pessoa pode trocar depois em "esqueci a
+ * senha".
+ */
+const SENHA_PADRAO = '123456';
 
 export const pessoasStore = {
   async listar(): Promise<Pessoa[]> {
@@ -59,7 +59,7 @@ export const pessoasStore = {
    * outra (ver `redefinirSenha`).
    */
   async convidar(dados: NovaPessoa): Promise<PessoaConvidada> {
-    const senhaTemporaria = senhaAleatoria();
+    const senhaTemporaria = SENHA_PADRAO;
 
     let usuario;
     try {
@@ -75,7 +75,8 @@ export const pessoasStore = {
     const pessoa: Omit<Pessoa, 'uid'> = {
       nome: dados.nome,
       email: dados.email,
-      papeis: dados.papeis,
+      papel: dados.papel,
+      departamento: dados.departamento,
       areasVisiveis: dados.areasVisiveis,
     };
     await db().collection(COLECAO).doc(usuario.uid).set(pessoa);
@@ -85,10 +86,11 @@ export const pessoasStore = {
 
   async atualizar(
     uid: string,
-    dados: { papeis: Papel[]; areasVisiveis: string[] },
+    dados: { papel: Papel; departamento?: string; areasVisiveis: string[] },
   ): Promise<void> {
     await db().collection(COLECAO).doc(uid).update({
-      papeis: dados.papeis,
+      papel: dados.papel,
+      departamento: dados.departamento,
       areasVisiveis: dados.areasVisiveis,
     });
   },
