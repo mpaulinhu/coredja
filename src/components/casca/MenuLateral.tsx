@@ -29,7 +29,9 @@ const ITENS: ItemDeMenu[] = [
   { href: '/painel', rotulo: 'Recados', icone: '💬' },
   { href: '/culto', rotulo: 'Ordem do Culto', icone: '🎵' },
   { href: '/avisos', rotulo: 'Avisos do Telão', icone: '📢' },
-  { href: '/escala', rotulo: 'Escala do Time', icone: '🎤' },
+  // Escala do Time oculta: a igreja já usa o Voluts para isso (19/08/2026).
+  // O código continua em src/app/(app)/escala/ e src/lib/escala*.ts, caso
+  // um dia volte a fazer sentido — só a entrada de menu foi removida.
 ];
 
 export function MenuLateral() {
