@@ -74,6 +74,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Escala do Time (documento único, id "atual") — ver `src/lib/escala.ts`.
+    // Mesma lógica de `culto`: leitura aberta para a tela mostrar quem
+    // confirmou presença em tempo real; escrita só pelo servidor, que
+    // confere `escala:escrever` (coordenador, para montar) ou
+    // `escala:presenca` (operador, para confirmar) — ver
+    // `src/app/api/escala/`. Nomes de voluntários do time técnico não são
+    // dado sensível no mesmo sentido de currículo ou documento — é a mesma
+    // informação que hoje já circula num grupo de WhatsApp da equipe.
+    match /escala/{documento} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Qualquer outra coleção fica fechada por padrão. Sem este bloco, uma
     // coleção nova criada no futuro herdaria o comportamento errado.
     match /{documento=**} {

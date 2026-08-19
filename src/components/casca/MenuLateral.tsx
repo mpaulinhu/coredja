@@ -29,7 +29,7 @@ const ITENS: ItemDeMenu[] = [
   { href: '/painel', rotulo: 'Recados', icone: '💬' },
   { href: '/culto', rotulo: 'Ordem do Culto', icone: '🎵' },
   { href: '/avisos', rotulo: 'Avisos do Telão', icone: '📢' },
-  { href: '/escala', rotulo: 'Escala do Time', icone: '🎤', emBreve: true },
+  { href: '/escala', rotulo: 'Escala do Time', icone: '🎤' },
 ];
 
 export function MenuLateral() {
