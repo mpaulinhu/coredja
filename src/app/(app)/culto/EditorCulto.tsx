@@ -4,12 +4,16 @@ import { useState } from 'react';
 import type { Bloco, Culto } from '@/lib/culto';
 
 interface Props {
+  /** null quando é uma ordem nova. */
   culto: Culto | null;
+  /** Datas que já têm ordem — para avisar antes de sobrescrever sem querer. */
+  datasOcupadas: string[];
   onSalvar: (
     data: string,
     blocos: Bloco[],
+    idAnterior?: string,
   ) => Promise<{ ok: true } | { ok: false; erro: string }>;
-  onAvancar: () => Promise<void>;
+  onVoltar: () => void;
 }
 
 function proximoDomingo(): string {
@@ -17,7 +21,9 @@ function proximoDomingo(): string {
   const diasAteDomingo = (7 - hoje.getDay()) % 7 || 7;
   const alvo = new Date(hoje);
   alvo.setDate(hoje.getDate() + diasAteDomingo);
-  return alvo.toISOString().slice(0, 10);
+  const mes = String(alvo.getMonth() + 1).padStart(2, '0');
+  const dia = String(alvo.getDate()).padStart(2, '0');
+  return `${alvo.getFullYear()}-${mes}-${dia}`;
 }
 
 function novoBloco(): Bloco {
@@ -30,7 +36,7 @@ function novoBloco(): Bloco {
  * fazem o mesmo trabalho, sem dependência, para uma lista de meia dúzia de
  * blocos.
  */
-export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
+export function EditorCulto({ culto, datasOcupadas, onSalvar, onVoltar }: Props) {
   const [data, setData] = useState(culto?.data ?? proximoDomingo());
   const [blocos, setBlocos] = useState<Bloco[]>(
     culto?.blocos.length ? culto.blocos : [novoBloco()],
@@ -79,7 +85,9 @@ export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
 
     setErro(null);
     setSalvando(true);
-    const resultado = await onSalvar(data, preenchidos);
+    // `culto.id` vai junto para o servidor saber que é uma ordem existente
+    // mudando de data — nesse caso ele move, em vez de deixar a antiga para trás.
+    const resultado = await onSalvar(data, preenchidos, culto?.id);
     setSalvando(false);
 
     if (resultado.ok) {
@@ -92,11 +100,22 @@ export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
 
   const totalMinutos = blocos.reduce((soma, b) => soma + (b.minutos || 0), 0);
   const emAndamento = culto?.blocoAtualId != null;
+  // Só é conflito se a data escolhida for de OUTRA ordem: reeditar a própria
+  // data da ordem aberta é o comportamento normal, não uma sobrescrita.
+  const conflitaComOutra = datasOcupadas.includes(data) && data !== culto?.data;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
-      <h1 className="text-2xl font-bold tracking-tight text-texto">
-        Ordem do Culto
+      <button
+        type="button"
+        onClick={onVoltar}
+        className="text-sm text-texto-suave hover:text-texto"
+      >
+        ← Todas as ordens
+      </button>
+
+      <h1 className="mt-3 text-2xl font-bold tracking-tight text-texto">
+        {culto ? 'Editar ordem' : 'Nova ordem'}
       </h1>
       <p className="mt-1 text-sm text-texto-suave">
         Monte a sequência. Quem estiver no domingo vê isto se atualizar
@@ -107,6 +126,12 @@ export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
         <div className="mt-4 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--urgente)', color: 'var(--urgente)' }}>
           O culto está em andamento. Salvar aqui reinicia a execução do
           início.
+        </div>
+      )}
+
+      {conflitaComOutra && (
+        <div className="mt-4 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--urgente)', color: 'var(--urgente)' }}>
+          Já existe uma ordem nesta data. Salvar substitui a que está lá.
         </div>
       )}
 
@@ -201,7 +226,7 @@ export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
         )}
       </div>
 
-      <div className="mt-6 flex gap-3">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <button
           type="button"
           onClick={salvar}
@@ -212,15 +237,13 @@ export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
           {salvando ? 'Salvando…' : salvo ? 'Salvo ✓' : 'Publicar'}
         </button>
 
-        {culto && (
-          <button
-            type="button"
-            onClick={onAvancar}
-            className="h-14 rounded-xl border border-borda px-5 text-sm font-medium text-texto-suave hover:text-texto"
-          >
-            Avançar →
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onVoltar}
+          className="h-14 rounded-xl border border-borda px-5 text-sm font-medium text-texto-suave hover:text-texto"
+        >
+          Concluir
+        </button>
       </div>
     </div>
   );

@@ -12,6 +12,10 @@ interface Props {
  * Modo de execução: quem opera no domingo. Só leitura da sequência — o único
  * controle é "avançar". A tela some do vermelho para o normal conforme os
  * blocos passam, para dar noção de progresso de relance, sem precisar ler.
+ *
+ * Recebe já a ordem ATIVA (a de hoje, senão a próxima futura) — quem opera no
+ * domingo não escolhe qual culto está acontecendo, o calendário escolhe. Ver
+ * `culto.ts`.
  */
 export function ExecucaoCulto({ culto, onAvancar }: Props) {
   const [avancando, setAvancando] = useState(false);
@@ -20,7 +24,7 @@ export function ExecucaoCulto({ culto, onAvancar }: Props) {
     return (
       <div className="flex h-full items-center justify-center px-5 text-center">
         <p className="text-sm text-texto-fraco">
-          Ninguém montou a ordem do culto ainda.
+          Nenhuma ordem publicada para hoje.
         </p>
       </div>
     );
