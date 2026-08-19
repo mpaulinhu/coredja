@@ -2,43 +2,59 @@
 
 import { useState } from 'react';
 import type { Papel } from '@/lib/papeis';
+import type { Departamento } from '@/lib/types';
 import type { AreaResumo } from './TelaUsuarios';
 import { TODOS_OS_PAPEIS } from './TelaUsuarios';
 import { SeletorPapeis } from './SeletorPapeis';
 import { SeletorAreas } from './SeletorAreas';
+import { SeletorDepartamento } from './SeletorDepartamento';
 
 interface Props {
   areas: AreaResumo[];
+  departamentos: Departamento[];
   onConvidar: (
     nome: string,
     email: string,
-    papeis: Papel[],
+    papel: Papel,
+    departamento: string | null,
     areasVisiveis: string[],
   ) => Promise<{ ok: true } | { ok: false; erro: string }>;
 }
 
-export function FormularioConvite({ areas, onConvidar }: Props) {
+export function FormularioConvite({ areas, departamentos, onConvidar }: Props) {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [papeis, setPapeis] = useState<Papel[]>([]);
+  const [papel, setPapel] = useState<Papel | null>(null);
+  const [departamento, setDepartamento] = useState<string | null>(null);
   const [areasVisiveis, setAreasVisiveis] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  // O acesso à conversa do próprio departamento já vem do campo Departamento —
+  // oferecê-lo aqui de novo sugeriria, erradamente, uma conversa consigo mesmo.
+  const areasExtras = areas.filter((a) => a.slug !== departamento);
+
   async function convidar() {
-    if (!nome.trim() || !email.trim() || papeis.length === 0) {
-      setErro('Preencha nome, e-mail, e escolha ao menos um papel.');
+    if (!nome.trim() || !email.trim() || !papel) {
+      setErro('Preencha nome, e-mail, e escolha um papel.');
       return;
     }
     setErro(null);
     setEnviando(true);
-    const resultado = await onConvidar(nome.trim(), email.trim(), papeis, areasVisiveis);
+    const resultado = await onConvidar(
+      nome.trim(),
+      email.trim(),
+      papel,
+      departamento,
+      areasVisiveis.filter((slug) => slug !== departamento),
+    );
     setEnviando(false);
 
     if (resultado.ok) {
       setNome('');
       setEmail('');
-      setPapeis([]);
+      setPapel(null);
+      setDepartamento(null);
       setAreasVisiveis([]);
     } else {
       setErro(resultado.erro);
@@ -74,15 +90,29 @@ export function FormularioConvite({ areas, onConvidar }: Props) {
       </div>
 
       <div>
-        <p className="mb-1.5 text-sm text-texto-suave">Papéis</p>
-        <SeletorPapeis opcoes={TODOS_OS_PAPEIS} selecionados={papeis} onMudar={setPapeis} />
+        <p className="mb-1.5 text-sm text-texto-suave">Papel</p>
+        <SeletorPapeis opcoes={TODOS_OS_PAPEIS} selecionado={papel} onMudar={setPapel} />
       </div>
 
-      {areas.length > 0 && (
+      {departamentos.length > 0 && (
         <div>
-          <p className="mb-1.5 text-sm text-texto-suave">Vê recados de</p>
+          <p className="mb-1.5 text-sm text-texto-suave">Departamento</p>
+          <SeletorDepartamento
+            opcoes={departamentos}
+            selecionado={departamento}
+            onMudar={setDepartamento}
+          />
+        </div>
+      )}
+
+      {areasExtras.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-sm text-texto-suave">
+            Pode conversar com{' '}
+            <span className="text-texto-fraco">· pode marcar mais de um</span>
+          </p>
           <SeletorAreas
-            areas={areas}
+            areas={areasExtras}
             selecionadas={areasVisiveis}
             onMudar={setAreasVisiveis}
           />

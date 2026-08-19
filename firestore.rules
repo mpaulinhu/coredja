@@ -33,8 +33,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Áreas (nome e cor). Sem o token — ver comentário acima.
-    match /areas/{area} {
+    // Departamentos (nome e cor). Fonte da verdade real desde a
+    // generalização "qualquer departamento fala com qualquer outro" — ver
+    // src/lib/firebase-store.ts.
+    match /departamentos/{departamento} {
       allow read: if true;
       allow write: if false;
     }
@@ -51,7 +53,8 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Ordem do Culto (documento único, id "atual") — ver `src/lib/culto.ts`.
+    // Ordem do Culto (um documento por data, id "AAAA-MM-DD") — ver
+    // `src/lib/culto.ts`.
     // Mesma lógica de `mensagens`: leitura aberta porque é o navegador do
     // operador que escuta o Firestore direto para a tela avançar sozinha no
     // domingo, sem F5. Escrita só pelo servidor, que confere o papel de quem

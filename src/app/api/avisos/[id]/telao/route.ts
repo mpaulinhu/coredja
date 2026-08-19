@@ -1,5 +1,5 @@
 import { avisosStore } from '@/lib/avisos-store';
-import { podeFazer, type Papel } from '@/lib/papeis';
+import { podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 
 export const dynamic = 'force-dynamic';
@@ -8,11 +8,10 @@ export const dynamic = 'force-dynamic';
  * Põe/tira um aviso do telão. Rota própria, separada de `POST /api/avisos`,
  * pela mesma razão de `culto/avancar`: a permissão é outra — quem opera no
  * domingo publica sem precisar poder cadastrar ou apagar aviso.
+ *
+ * `avisos:publicar` já é herdada por Líder (e Admin acima), então checar só
+ * ela cobre todo mundo que antes precisava do OR com `avisos:escrever`.
  */
-function podeOperarTelao(papeis: Papel[]): boolean {
-  return podeFazer(papeis, 'avisos:publicar') || podeFazer(papeis, 'avisos:escrever');
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -21,7 +20,7 @@ export async function POST(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeOperarTelao(pessoa.papeis)) {
+  if (!podeFazer(pessoa.papel, 'avisos:publicar')) {
     return Response.json({ erro: 'Seu papel não pode publicar no telão.' }, { status: 403 });
   }
 
@@ -38,7 +37,7 @@ export async function DELETE(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeOperarTelao(pessoa.papeis)) {
+  if (!podeFazer(pessoa.papel, 'avisos:publicar')) {
     return Response.json({ erro: 'Seu papel não pode alterar o telão.' }, { status: 403 });
   }
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
 import type { Papel, Pessoa } from '@/lib/papeis';
+import type { Departamento } from '@/lib/types';
 import { FormularioConvite } from './FormularioConvite';
 import { LinhaPessoa } from './LinhaPessoa';
 
@@ -12,11 +13,31 @@ export interface AreaResumo {
   cor: string;
 }
 
-export const TODOS_OS_PAPEIS: { valor: Papel; rotulo: string }[] = [
-  { valor: 'admin', rotulo: 'Admin' },
-  { valor: 'lider', rotulo: 'Líder' },
-  { valor: 'coordenador', rotulo: 'Coordenador' },
-  { valor: 'operador', rotulo: 'Operador' },
+/**
+ * Do mais para o menos amplo — hierarquia de cargo único, cada um inclui os
+ * de baixo. A ordem da lista reflete isso visualmente (Admin no topo).
+ */
+export const TODOS_OS_PAPEIS: { valor: Papel; rotulo: string; descricao: string }[] = [
+  {
+    valor: 'admin',
+    rotulo: 'Admin',
+    descricao: 'Gerencia quem tem conta e o que cada um pode ver — e tudo que Líder, Coordenador e Operador fazem',
+  },
+  {
+    valor: 'lider',
+    rotulo: 'Líder',
+    descricao: 'Monta a ordem do culto e os avisos — e tudo que Coordenador e Operador fazem',
+  },
+  {
+    valor: 'coordenador',
+    rotulo: 'Coordenador',
+    descricao: 'Monta a escala do time — e tudo que Operador faz',
+  },
+  {
+    valor: 'operador',
+    rotulo: 'Operador',
+    descricao: 'Executa no domingo: avança o culto, publica aviso, marca presença',
+  },
 ];
 
 /**
@@ -31,6 +52,7 @@ export const TODOS_OS_PAPEIS: { valor: Papel; rotulo: string }[] = [
 export function TelaUsuarios() {
   const [pessoas, setPessoas] = useState<Pessoa[] | undefined>(undefined);
   const [areas, setAreas] = useState<AreaResumo[]>([]);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [senhaGerada, setSenhaGerada] = useState<{ email: string; senha: string } | null>(null);
 
@@ -48,6 +70,7 @@ export function TelaUsuarios() {
     }
     setPessoas(dados.pessoas);
     setAreas(dados.areas);
+    setDepartamentos(dados.departamentos ?? []);
   }, []);
 
   useEffect(() => {
@@ -57,14 +80,20 @@ export function TelaUsuarios() {
   }, [carregar]);
 
   const convidar = useCallback(
-    async (nome: string, email: string, papeis: Papel[], areasVisiveis: string[]) => {
+    async (
+      nome: string,
+      email: string,
+      papel: Papel,
+      departamento: string | null,
+      areasVisiveis: string[],
+    ) => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return { ok: false as const, erro: 'Sessão expirada.' };
 
       const resp = await fetch('/api/pessoas', {
         method: 'POST',
         headers: { ...cabecalho, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, email, papeis, areasVisiveis }),
+        body: JSON.stringify({ nome, email, papel, departamento, areasVisiveis }),
       });
       const dados = await resp.json();
       if (!resp.ok) return { ok: false as const, erro: dados.erro ?? 'Falha ao convidar.' };
@@ -77,13 +106,18 @@ export function TelaUsuarios() {
   );
 
   const atualizar = useCallback(
-    async (uid: string, papeis: Papel[], areasVisiveis: string[]) => {
+    async (
+      uid: string,
+      papel: Papel,
+      departamento: string | null,
+      areasVisiveis: string[],
+    ) => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return;
       await fetch(`/api/pessoas/${uid}`, {
         method: 'PUT',
         headers: { ...cabecalho, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ papeis, areasVisiveis }),
+        body: JSON.stringify({ papel, departamento, areasVisiveis }),
       });
       await carregar();
     },
@@ -155,7 +189,7 @@ export function TelaUsuarios() {
 
       <div className="mt-6 rounded-2xl border border-borda bg-fundo-elevado p-5 sm:p-6">
         <h2 className="text-sm font-semibold text-texto-suave">Convidar pessoa</h2>
-        <FormularioConvite areas={areas} onConvidar={convidar} />
+        <FormularioConvite areas={areas} departamentos={departamentos} onConvidar={convidar} />
       </div>
 
       <ul className="mt-6 flex flex-col gap-2">
@@ -167,7 +201,10 @@ export function TelaUsuarios() {
             key={p.uid}
             pessoa={p}
             areas={areas}
-            onAtualizar={(papeis, areasVisiveis) => atualizar(p.uid, papeis, areasVisiveis)}
+            departamentos={departamentos}
+            onAtualizar={(papel, departamento, areasVisiveis) =>
+              atualizar(p.uid, papel, departamento, areasVisiveis)
+            }
             onRemover={() => remover(p.uid)}
           />
         ))}

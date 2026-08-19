@@ -2,35 +2,51 @@
 
 import { useState } from 'react';
 import type { Papel, Pessoa } from '@/lib/papeis';
+import type { Departamento } from '@/lib/types';
 import type { AreaResumo } from './TelaUsuarios';
 import { TODOS_OS_PAPEIS } from './TelaUsuarios';
 import { SeletorPapeis } from './SeletorPapeis';
 import { SeletorAreas } from './SeletorAreas';
+import { SeletorDepartamento } from './SeletorDepartamento';
 
 interface Props {
   pessoa: Pessoa;
   areas: AreaResumo[];
-  onAtualizar: (papeis: Papel[], areasVisiveis: string[]) => Promise<void>;
+  departamentos: Departamento[];
+  onAtualizar: (
+    papel: Papel,
+    departamento: string | null,
+    areasVisiveis: string[],
+  ) => Promise<void>;
   onRemover: () => Promise<void>;
 }
 
 /** Uma pessoa na lista: some/expande para editar, sem sair da página. */
-export function LinhaPessoa({ pessoa, areas, onAtualizar, onRemover }: Props) {
+export function LinhaPessoa({ pessoa, areas, departamentos, onAtualizar, onRemover }: Props) {
   const [editando, setEditando] = useState(false);
-  const [papeis, setPapeis] = useState<Papel[]>(pessoa.papeis);
+  const [papel, setPapel] = useState<Papel>(pessoa.papel);
+  const [departamento, setDepartamento] = useState<string | null>(pessoa.departamento ?? null);
   const [areasVisiveis, setAreasVisiveis] = useState<string[]>(pessoa.areasVisiveis ?? []);
   const [salvando, setSalvando] = useState(false);
 
   async function salvar() {
     setSalvando(true);
-    await onAtualizar(papeis, areasVisiveis);
+    // Se o departamento mudou para um que estava marcado como área extra, o
+    // valor antigo fica redundante — sai aqui em vez de virar dado morto.
+    await onAtualizar(
+      papel,
+      departamento,
+      areasVisiveis.filter((slug) => slug !== departamento),
+    );
     setSalvando(false);
     setEditando(false);
   }
 
-  const rotulosPapeis = TODOS_OS_PAPEIS.filter((op) => pessoa.papeis.includes(op.valor))
-    .map((op) => op.rotulo)
-    .join(', ');
+  const rotuloPapel = TODOS_OS_PAPEIS.find((op) => op.valor === pessoa.papel)?.rotulo;
+
+  // O acesso à conversa do próprio departamento já vem do campo Departamento —
+  // oferecê-lo aqui de novo sugeriria, erradamente, uma conversa consigo mesmo.
+  const areasExtras = areas.filter((a) => a.slug !== departamento);
 
   return (
     <li className="rounded-xl border border-borda bg-fundo-cartao px-4 py-3.5">
@@ -38,7 +54,7 @@ export function LinhaPessoa({ pessoa, areas, onAtualizar, onRemover }: Props) {
         <div className="min-w-0">
           <p className="font-medium text-texto">{pessoa.nome}</p>
           <p className="text-sm text-texto-suave">{pessoa.email}</p>
-          <p className="mt-0.5 text-xs text-texto-fraco">{rotulosPapeis || 'Sem papel'}</p>
+          <p className="mt-0.5 text-xs text-texto-fraco">{rotuloPapel ?? 'Sem papel'}</p>
         </div>
         <div className="flex shrink-0 gap-2">
           <button
@@ -62,15 +78,29 @@ export function LinhaPessoa({ pessoa, areas, onAtualizar, onRemover }: Props) {
       {editando && (
         <div className="mt-4 flex flex-col gap-3 border-t border-borda pt-4">
           <div>
-            <p className="mb-1.5 text-sm text-texto-suave">Papéis</p>
-            <SeletorPapeis opcoes={TODOS_OS_PAPEIS} selecionados={papeis} onMudar={setPapeis} />
+            <p className="mb-1.5 text-sm text-texto-suave">Papel</p>
+            <SeletorPapeis opcoes={TODOS_OS_PAPEIS} selecionado={papel} onMudar={setPapel} />
           </div>
 
-          {areas.length > 0 && (
+          {departamentos.length > 0 && (
             <div>
-              <p className="mb-1.5 text-sm text-texto-suave">Vê recados de</p>
+              <p className="mb-1.5 text-sm text-texto-suave">Departamento</p>
+              <SeletorDepartamento
+                opcoes={departamentos}
+                selecionado={departamento}
+                onMudar={setDepartamento}
+              />
+            </div>
+          )}
+
+          {areasExtras.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-sm text-texto-suave">
+                Pode conversar com{' '}
+                <span className="text-texto-fraco">· pode marcar mais de um</span>
+              </p>
               <SeletorAreas
-                areas={areas}
+                areas={areasExtras}
                 selecionadas={areasVisiveis}
                 onMudar={setAreasVisiveis}
               />

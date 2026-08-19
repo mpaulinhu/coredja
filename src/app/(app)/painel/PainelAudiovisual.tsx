@@ -5,31 +5,35 @@ import { ImagemAnexo } from '@/components/ImagemAnexo';
 import { useAlertaSonoro } from '@/hooks/useAlertaSonoro';
 import { useEventos } from '@/hooks/useEventos';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
-import type { Conversa } from '@/lib/conversas';
+import { AUDIOVISUAL_SLUG, type Conversa } from '@/lib/conversa-compartilhado';
 import { dataHora, hora, tempoDecorrido } from '@/lib/formatar';
 import type { Mensagem } from '@/lib/types';
 
 /**
- * Painel do audiovisual.
+ * Painel de conversas.
  *
- * Uma conversa por área, como num aplicativo de mensagem: à esquerda a lista
- * de áreas com o que está pendente em cada uma, à direita a conversa aberta.
- * As respostas do audiovisual ficam dentro da conversa a que pertencem.
+ * Uma conversa por par de departamentos, como num aplicativo de mensagem: à
+ * esquerda a lista de conversas com o que está pendente em cada uma, à
+ * direita a conversa aberta. As respostas ficam dentro da conversa a que
+ * pertencem.
  *
  * Fica num monitor lateral durante o culto — daí os alvos grandes, o texto
  * legível de longe, e o som quando chega recado, já que quem opera a mesa não
- * fica olhando para esta tela.
+ * fica olhando para esta tela. O aparato de urgência (toggle, pendente,
+ * resolver/reabrir) só aparece em conversas que envolvem o Audiovisual — ver
+ * `conversa.temUrgencia`.
  */
 
-interface Props {
-  conversasIniciais: Conversa[];
+/** Id estável de uma conversa: mesmo algoritmo de `idDaConversa`. */
+function idDaConversa(a: string, b: string): string {
+  return [a, b].sort().join('__');
 }
 
-export function PainelAudiovisual({ conversasIniciais }: Props) {
-  const [conversas, setConversas] = useState(conversasIniciais);
-  const [abertaSlug, setAbertaSlug] = useState<string | null>(
-    conversasIniciais[0]?.area.slug ?? null,
-  );
+export function PainelAudiovisual() {
+  const [conversas, setConversas] = useState<Conversa[]>([]);
+  const [meuDepartamento, setMeuDepartamento] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [abertaId, setAbertaId] = useState<string | null>(null);
   const [som, setSom] = useState(true);
   const [conectado, setConectado] = useState(true);
   const [mostrarResolvidos, setMostrarResolvidos] = useState(false);
@@ -38,11 +42,13 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
 
   // Guarda os identificadores já vistos para tocar o som só em recado
   // realmente novo — sem isso, resolver um recado dispararia o alerta.
-  const conhecidos = useRef<Set<string>>(
-    new Set(conversasIniciais.flatMap((c) => c.mensagens.map((m) => m.id))),
-  );
+  const conhecidos = useRef<Set<string>>(new Set());
+  // A primeira carga não deve tocar som: são recados que já estavam lá.
+  const primeiraCarga = useRef(true);
 
-  const aberta = conversas.find((c) => c.area.slug === abertaSlug) ?? null;
+  const aberta =
+    conversas.find((c) => idDaConversa(c.deptoA.slug, c.deptoB.slug) === abertaId) ??
+    null;
 
   const recarregar = useCallback(async () => {
     try {
@@ -55,25 +61,63 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
       });
       if (!resposta.ok) return;
 
-      const dados = (await resposta.json()) as { conversas: Conversa[] };
+      const dados = (await resposta.json()) as {
+        conversas: Conversa[];
+        meuDepartamento: string | null;
+      };
       const todas = dados.conversas.flatMap((c) => c.mensagens);
 
-      // Toca apenas para recados vindos de área: a própria resposta do
-      // audiovisual não deve alertar quem acabou de escrevê-la.
-      const novos = todas.filter(
-        (m) => !conhecidos.current.has(m.id) && m.autor === 'area',
-      );
-      if (novos.length > 0) {
-        tocar(novos.some((m) => m.prioridade === 'urgente'));
+      // Toca apenas para recados vindos de outro departamento: a própria
+      // mensagem não deve alertar quem acabou de escrevê-la.
+      if (!primeiraCarga.current) {
+        const novos = todas.filter(
+          (m) =>
+            !conhecidos.current.has(m.id) && m.remetente !== dados.meuDepartamento,
+        );
+        if (novos.length > 0) {
+          tocar(novos.some((m) => m.prioridade === 'urgente'));
+        }
       }
+      primeiraCarga.current = false;
       conhecidos.current = new Set(todas.map((m) => m.id));
 
       setConversas(dados.conversas);
+      setMeuDepartamento(dados.meuDepartamento);
+      setCarregando(false);
       setConectado(true);
+
+      // Abre a primeira conversa assim que a lista chega, se nenhuma estiver
+      // aberta ainda (ou se a que estava aberta sumiu da lista).
+      setAbertaId((atual) => {
+        const aindaExiste =
+          atual &&
+          dados.conversas.some(
+            (c) => idDaConversa(c.deptoA.slug, c.deptoB.slug) === atual,
+          );
+        if (aindaExiste) return atual;
+        const primeira = dados.conversas[0];
+        return primeira
+          ? idDaConversa(primeira.deptoA.slug, primeira.deptoB.slug)
+          : null;
+      });
     } catch {
       setConectado(false);
     }
   }, [tocar]);
+
+  // Primeira carga: o servidor não monta nada (não tem a sessão), então o
+  // painel busca assim que monta no navegador. `cancelado` evita atualizar
+  // estado se o componente sair antes da resposta chegar.
+  useEffect(() => {
+    let cancelado = false;
+    void (async () => {
+      if (cancelado) return;
+      await recarregar();
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [recarregar]);
 
   useEventos(useCallback(() => void recarregar(), [recarregar]));
 
@@ -107,9 +151,12 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
               }
             : m,
         );
-        const pendentes = mensagens.filter(
-          (m) => m.autor === 'area' && !m.resolvidaEm,
-        );
+        // Espelha a regra do servidor (`montarConversas`): pendente é o que
+        // chegou PARA o Audiovisual resolver — por isso compara com o slug
+        // dele, e não com o departamento de quem está olhando.
+        const pendentes = conversa.temUrgencia
+          ? mensagens.filter((m) => m.remetente !== AUDIOVISUAL_SLUG && !m.resolvidaEm)
+          : [];
         return {
           ...conversa,
           mensagens,
@@ -143,7 +190,6 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-borda bg-fundo-elevado px-5 py-3">
         <h1 className="text-xl font-bold tracking-tight text-texto">Coredja</h1>
-        <span className="text-sm text-texto-fraco">Audiovisual</span>
 
         {totalPendentes > 0 && (
           <span className="rounded-full bg-fundo-cartao px-2.5 py-1 text-xs font-semibold text-texto-suave">
@@ -174,13 +220,15 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
       <div className="flex min-h-0 flex-1">
         <ListaDeConversas
           conversas={conversas}
-          abertaSlug={abertaSlug}
-          aoEscolher={setAbertaSlug}
+          meuDepartamento={meuDepartamento}
+          abertaId={abertaId}
+          aoEscolher={setAbertaId}
         />
 
         {aberta ? (
           <PainelDaConversa
             conversa={aberta}
+            meuDepartamento={meuDepartamento}
             mostrarResolvidos={mostrarResolvidos}
             aoAlternarResolvidos={() => setMostrarResolvidos((v) => !v)}
             aoMudarEstado={mudarEstado}
@@ -189,7 +237,11 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-center">
             <p className="text-texto-fraco">
-              Escolha uma área para ver a conversa.
+              {carregando
+                ? 'Carregando…'
+                : conversas.length === 0
+                  ? 'Nenhuma conversa por aqui ainda.'
+                  : 'Escolha uma conversa para ver as mensagens.'}
             </p>
           </div>
         )}
@@ -198,48 +250,73 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
   );
 }
 
-/** Coluna da esquerda: uma linha por área, com o que está pendente nela. */
+/**
+ * Com quem eu estou falando nesta conversa — a ponta que não é a minha.
+ *
+ * É relativo a quem está logado, não fixo no Audiovisual: para alguém da
+ * Cantina, a conversa "Cantina ↔ Audiovisual" é uma conversa com o
+ * *Audiovisual*, e mostrar "Cantina" ali faria parecer que a pessoa fala
+ * consigo mesma.
+ *
+ * Quem não tem departamento (ex: um admin que só supervisiona) não é ponta de
+ * conversa nenhuma: aí as duas aparecem, uma ao lado da outra.
+ */
+function outroLado(
+  conversa: Conversa,
+  meuDepartamento: string | null,
+): { nome: string; cor: string } {
+  if (conversa.deptoA.slug === meuDepartamento) return conversa.deptoB;
+  if (conversa.deptoB.slug === meuDepartamento) return conversa.deptoA;
+  return {
+    nome: `${conversa.deptoA.nome} ↔ ${conversa.deptoB.nome}`,
+    cor: conversa.deptoA.cor,
+  };
+}
+
+/** Coluna da esquerda: uma linha por conversa, com o que está pendente nela. */
 function ListaDeConversas({
   conversas,
-  abertaSlug,
+  meuDepartamento,
+  abertaId,
   aoEscolher,
 }: {
   conversas: Conversa[];
-  abertaSlug: string | null;
-  aoEscolher: (slug: string) => void;
+  meuDepartamento: string | null;
+  abertaId: string | null;
+  aoEscolher: (id: string) => void;
 }) {
   return (
     <nav
-      aria-label="Áreas"
+      aria-label="Conversas"
       className="w-[15rem] shrink-0 overflow-y-auto border-r border-borda bg-fundo-elevado md:w-[19rem]"
     >
       <ul>
         {conversas.map((conversa) => {
-          const ativa = conversa.area.slug === abertaSlug;
+          const id = idDaConversa(conversa.deptoA.slug, conversa.deptoB.slug);
+          const ativa = id === abertaId;
+          const lado = outroLado(conversa, meuDepartamento);
           return (
-            <li key={conversa.area.slug}>
+            <li key={id}>
               <button
                 type="button"
-                onClick={() => aoEscolher(conversa.area.slug)}
+                onClick={() => aoEscolher(id)}
                 aria-current={ativa ? 'true' : undefined}
                 className="flex w-full items-center gap-3 border-b border-borda px-4 py-3.5 text-left transition-colors hover:bg-fundo-cartao"
                 style={{
                   background: ativa ? 'var(--fundo-cartao)' : undefined,
-                  boxShadow: ativa
-                    ? `inset 3px 0 0 ${conversa.area.cor}`
-                    : undefined,
+                  boxShadow: ativa ? `inset 3px 0 0 ${lado.cor}` : undefined,
                 }}
               >
                 <span
                   className="h-9 w-9 shrink-0 rounded-full"
-                  style={{ background: conversa.area.cor }}
+                  style={{ background: lado.cor }}
                   aria-hidden="true"
                 />
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="truncate font-semibold text-texto">
-                      {conversa.area.nome}
+                      {lado.nome}
                     </span>
                     {conversa.ultima && (
                       <span className="ml-auto shrink-0 text-[11px] text-texto-fraco">
@@ -252,7 +329,9 @@ function ListaDeConversas({
                     <span className="truncate text-xs text-texto-fraco">
                       {conversa.ultima
                         ? `${
-                            conversa.ultima.autor === 'audiovisual' ? 'Você: ' : ''
+                            conversa.ultima.remetente === meuDepartamento
+                              ? 'Você: '
+                              : ''
                           }${
                             conversa.ultima.texto ||
                             (conversa.ultima.anexos.length > 0 ? '📷 imagem' : '')
@@ -260,7 +339,7 @@ function ListaDeConversas({
                         : 'Nenhum recado ainda'}
                     </span>
 
-                    {conversa.pendentes > 0 && (
+                    {conversa.temUrgencia && conversa.pendentes > 0 && (
                       <span
                         className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
                         style={{
@@ -291,12 +370,14 @@ function ListaDeConversas({
 /** Coluna da direita: a conversa aberta, com o campo de resposta embaixo. */
 function PainelDaConversa({
   conversa,
+  meuDepartamento,
   mostrarResolvidos,
   aoAlternarResolvidos,
   aoMudarEstado,
   aoEnviar,
 }: {
   conversa: Conversa;
+  meuDepartamento: string | null;
   mostrarResolvidos: boolean;
   aoAlternarResolvidos: () => void;
   aoMudarEstado: (id: string, acao: 'resolver' | 'reabrir') => Promise<void>;
@@ -304,34 +385,40 @@ function PainelDaConversa({
 }) {
   const fim = useRef<HTMLDivElement>(null);
 
-  const visiveis = mostrarResolvidos
-    ? conversa.mensagens
-    : conversa.mensagens.filter((m) => m.autor === 'audiovisual' || !m.resolvidaEm);
+  const lado = outroLado(conversa, meuDepartamento);
+  const conversaId = idDaConversa(conversa.deptoA.slug, conversa.deptoB.slug);
+
+  const visiveis =
+    mostrarResolvidos || !conversa.temUrgencia
+      ? conversa.mensagens
+      : conversa.mensagens.filter(
+          (m) => m.remetente === meuDepartamento || !m.resolvidaEm,
+        );
 
   const ocultos = conversa.mensagens.length - visiveis.length;
 
-  // Rola para o fim ao trocar de área ou chegar mensagem nova.
+  // Rola para o fim ao trocar de conversa ou chegar mensagem nova.
   useEffect(() => {
     fim.current?.scrollIntoView({ block: 'end' });
-  }, [conversa.area.slug, conversa.mensagens.length, mostrarResolvidos]);
+  }, [conversaId, conversa.mensagens.length, mostrarResolvidos]);
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-borda px-5 py-3">
         <span
           className="h-3 w-3 rounded-full"
-          style={{ background: conversa.area.cor }}
+          style={{ background: lado.cor }}
           aria-hidden="true"
         />
-        <h2 className="text-lg font-bold text-texto">{conversa.area.nome}</h2>
+        <h2 className="text-lg font-bold text-texto">{lado.nome}</h2>
 
-        {conversa.pendentes > 0 && (
+        {conversa.temUrgencia && conversa.pendentes > 0 && (
           <span className="text-sm text-texto-fraco">
             {conversa.pendentes} pendente{conversa.pendentes > 1 ? 's' : ''}
           </span>
         )}
 
-        {(ocultos > 0 || mostrarResolvidos) && (
+        {conversa.temUrgencia && (ocultos > 0 || mostrarResolvidos) && (
           <button
             type="button"
             onClick={aoAlternarResolvidos}
@@ -348,7 +435,7 @@ function PainelDaConversa({
         {visiveis.length === 0 ? (
           <p className="py-16 text-center text-sm text-texto-fraco">
             {conversa.mensagens.length === 0
-              ? `Nenhum recado da ${conversa.area.nome} ainda.`
+              ? `Nenhum recado de ${lado.nome} ainda.`
               : 'Tudo resolvido por aqui.'}
           </p>
         ) : (
@@ -360,6 +447,8 @@ function PainelDaConversa({
               <BalaoDoPainel
                 key={mensagem.id}
                 mensagem={mensagem}
+                meuDepartamento={meuDepartamento}
+                temUrgencia={conversa.temUrgencia}
                 aoMudarEstado={aoMudarEstado}
               />
             ))}
@@ -368,33 +457,39 @@ function PainelDaConversa({
         <div ref={fim} />
       </div>
 
-      {/* A key faz o React recriar o campo ao trocar de área, o que zera o
-          rascunho — sem isso, um texto começado para a Cantina apareceria na
-          conversa do Kids. */}
-      <CampoDeResposta
-        key={conversa.area.slug}
-        areaSlug={conversa.area.slug}
-        aoEnviar={aoEnviar}
-      />
+      {/* A key faz o React recriar o campo ao trocar de conversa, o que zera
+          o rascunho — sem isso, um texto começado para a Cantina apareceria
+          na conversa do Kids. */}
+      <CampoDeResposta key={conversaId} conversaId={conversaId} aoEnviar={aoEnviar} />
     </section>
   );
 }
 
-/** Um recado dentro da conversa. Da área à esquerda, seu à direita. */
+/**
+ * Um recado dentro da conversa. Do outro lado à esquerda, seu à direita.
+ *
+ * `temUrgencia` esconde todo o aparato de urgência (badge "Urgente", botão
+ * resolver/reabrir) em conversas que não envolvem o Audiovisual — ver
+ * `conversaTemUrgencia` em `conversas.ts`.
+ */
 function BalaoDoPainel({
   mensagem,
+  meuDepartamento,
+  temUrgencia,
   aoMudarEstado,
 }: {
   mensagem: Mensagem;
+  meuDepartamento: string | null;
+  temUrgencia: boolean;
   aoMudarEstado: (id: string, acao: 'resolver' | 'reabrir') => Promise<void>;
 }) {
-  const daArea = mensagem.autor === 'area';
-  const urgente = mensagem.prioridade === 'urgente';
+  const doOutroLado = mensagem.remetente !== meuDepartamento;
+  const urgente = temUrgencia && mensagem.prioridade === 'urgente';
   const resolvido = Boolean(mensagem.resolvidaEm);
-  const pulsa = daArea && urgente && !resolvido;
+  const pulsa = doOutroLado && urgente && !resolvido;
 
   return (
-    <li className={`flex ${daArea ? 'justify-start' : 'justify-end'}`}>
+    <li className={`flex ${doOutroLado ? 'justify-start' : 'justify-end'}`}>
       <div
         className={`entrada max-w-[min(85%,44rem)] rounded-xl border-l-4 border-y border-r p-3.5 ${
           pulsa ? 'pulso-urgente' : ''
@@ -402,7 +497,7 @@ function BalaoDoPainel({
         style={{
           background: 'var(--fundo-cartao)',
           borderLeftColor:
-            daArea && urgente && !resolvido ? 'var(--urgente)' : 'transparent',
+            doOutroLado && urgente && !resolvido ? 'var(--urgente)' : 'transparent',
           borderTopColor: 'var(--borda)',
           borderRightColor: 'var(--borda)',
           borderBottomColor: 'var(--borda)',
@@ -410,15 +505,15 @@ function BalaoDoPainel({
         }}
       >
         <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          {urgente && daArea && (
+          {urgente && doOutroLado && (
             <span className="rounded-md bg-urgente px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
               Urgente
             </span>
           )}
-          {!daArea && (
+          {!doOutroLado && (
             <span className="text-xs font-semibold text-acento">Você</span>
           )}
-          {resolvido && (
+          {temUrgencia && resolvido && (
             <span className="text-[11px] font-medium text-sucesso">
               ✓ resolvido
             </span>
@@ -447,8 +542,9 @@ function BalaoDoPainel({
           </ul>
         )}
 
-        {/* Só recado de área se resolve: resposta sua não é tarefa sua. */}
-        {daArea && (
+        {/* Só recado do outro lado se resolve, e só em conversa com
+            Audiovisual: resposta sua não é tarefa sua. */}
+        {temUrgencia && doOutroLado && (
           <button
             type="button"
             onClick={() =>
@@ -466,10 +562,10 @@ function BalaoDoPainel({
 
 /** Campo de resposta, fixo no rodapé da conversa aberta. */
 function CampoDeResposta({
-  areaSlug,
+  conversaId,
   aoEnviar,
 }: {
-  areaSlug: string;
+  conversaId: string;
   aoEnviar: () => Promise<void>;
 }) {
   const [texto, setTexto] = useState('');
@@ -494,7 +590,7 @@ function CampoDeResposta({
       const resposta = await fetch('/api/painel/mensagens', {
         method: 'POST',
         headers: { ...cabecalho, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ areaSlug, texto: conteudo }),
+        body: JSON.stringify({ conversaId, texto: conteudo }),
       });
       if (!resposta.ok) {
         const dados = (await resposta.json().catch(() => ({}))) as {
