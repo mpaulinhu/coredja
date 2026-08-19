@@ -1,0 +1,38 @@
+# Publica firestore.rules no Firebase automaticamente.
+#
+# Antes desta automação, alguém precisava abrir o Console do Firebase e
+# colar o arquivo manualmente a cada mudança de regra — passo fácil de
+# esquecer, e que travava telas novas com "Carregando..." infinito até
+# alguém lembrar de fazê-lo (ver o histórico das telas de Culto e Avisos).
+#
+# Roda sozinho quando `firestore.rules` muda na branch principal. Também
+# pode ser disparado à mão pela aba Actions do GitHub, se precisar publicar
+# de novo sem mudar o arquivo.
+name: Publicar regras do Firestore
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+  workflow_dispatch:
+
+jobs:
+  publicar:
+    name: Deploy firestore.rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Publicar regras
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_ADMIN_CREDENCIAL }}
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/credencial.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/credencial.json
+          firebase deploy --only firestore:rules --project coreadja-43109 --non-interactive
+          rm -f /tmp/credencial.json

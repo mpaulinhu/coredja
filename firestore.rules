@@ -39,6 +39,41 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Papel de cada pessoa da igreja (líder, coordenador, operador) que faz
+    // login no Coredja publicado — ver `src/lib/papeis.ts` e `sessao.ts`.
+    // Fechada para o navegador dos dois lados: o servidor lê com o Admin SDK
+    // (que ignora estas regras) para conferir permissão a cada requisição, e
+    // é o único que escreve, quando um líder cadastra alguém. Uma pessoa
+    // nunca precisa consultar o Firestore diretamente para saber seu próprio
+    // papel — a tela pergunta ao servidor, que já confere o token.
+    match /pessoas/{uid} {
+      allow read, write: if false;
+    }
+
+    // Ordem do Culto (documento único, id "atual") — ver `src/lib/culto.ts`.
+    // Mesma lógica de `mensagens`: leitura aberta porque é o navegador do
+    // operador que escuta o Firestore direto para a tela avançar sozinha no
+    // domingo, sem F5. Escrita só pelo servidor, que confere o papel de quem
+    // pediu (líder monta, operador avança) antes de gravar — ver
+    // `src/app/api/culto/route.ts`.
+    //
+    // A sequência do culto não é dado sensível — é a mesma informação que
+    // hoje já fica visível num papel colado na mesa de som.
+    match /culto/{documento} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Avisos do Telão — ver `src/lib/avisos.ts`. Mesma lógica de `culto`:
+    // leitura aberta para o navegador escutar em tempo real qual aviso está
+    // no ar; escrita só pelo servidor, que confere `avisos:escrever` (líder,
+    // para cadastrar/remover) ou `avisos:publicar` (operador, para o telão)
+    // antes de gravar — ver `src/app/api/avisos/`.
+    match /avisos/{aviso} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Qualquer outra coleção fica fechada por padrão. Sem este bloco, uma
     // coleção nova criada no futuro herdaria o comportamento errado.
     match /{documento=**} {
