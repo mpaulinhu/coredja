@@ -69,7 +69,7 @@ export function TelaAvisos() {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-xl flex-col px-5 py-8">
+    <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
       <h1 className="text-2xl font-bold tracking-tight text-texto">
         Avisos do Telão
       </h1>
@@ -77,13 +77,15 @@ export function TelaAvisos() {
         Cadastre durante a semana. No domingo, publique o que deve aparecer.
       </p>
 
-      <FormularioNovoAviso onCriar={criar} />
+      <div className="mt-6 rounded-2xl border border-borda bg-fundo-elevado p-5 sm:p-6">
+        <FormularioNovoAviso onCriar={criar} />
 
-      {erro && (
-        <p role="alert" className="mt-3 text-sm" style={{ color: 'var(--urgente)' }}>
-          {erro}
-        </p>
-      )}
+        {erro && (
+          <p role="alert" className="mt-3 text-sm" style={{ color: 'var(--urgente)' }}>
+            {erro}
+          </p>
+        )}
+      </div>
 
       <ul className="mt-6 flex flex-col gap-2">
         {avisos.length === 0 && (
@@ -107,8 +109,8 @@ export function TelaAvisos() {
               </div>
               {aviso.noAr && (
                 <span
-                  className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white"
-                  style={{ background: 'var(--acento)' }}
+                  className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide"
+                  style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
                 >
                   No telão
                 </span>
@@ -119,8 +121,11 @@ export function TelaAvisos() {
               <button
                 type="button"
                 onClick={() => (aviso.noAr ? ocultar(aviso.id) : publicar(aviso.id))}
-                className="h-10 flex-1 rounded-lg text-sm font-semibold text-white"
-                style={{ background: aviso.noAr ? 'var(--borda-forte)' : 'var(--acento)' }}
+                className="h-10 flex-1 rounded-lg text-sm font-semibold"
+                style={{
+                  background: aviso.noAr ? 'var(--borda-forte)' : 'var(--acento)',
+                  color: aviso.noAr ? 'var(--texto)' : 'var(--acento-texto)',
+                }}
               >
                 {aviso.noAr ? 'Tirar do telão' : 'Publicar no telão'}
               </button>
@@ -168,7 +173,7 @@ function FormularioNovoAviso({
   }
 
   return (
-    <div className="mt-5 flex flex-col gap-2 rounded-xl border border-dashed border-borda p-4">
+    <div className="flex flex-col gap-2">
       <input
         value={titulo}
         onChange={(e) => setTitulo(e.target.value)}
@@ -186,8 +191,8 @@ function FormularioNovoAviso({
         type="button"
         onClick={salvar}
         disabled={salvando || !titulo.trim()}
-        className="h-11 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
-        style={{ background: 'var(--acento)' }}
+        className="h-11 rounded-lg text-sm font-semibold disabled:opacity-50"
+        style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
       >
         {salvando ? 'Salvando…' : 'Cadastrar aviso'}
       </button>

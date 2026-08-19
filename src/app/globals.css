@@ -1,33 +1,42 @@
+@import url("https://fonts.googleapis.com/css2?family=Golos+Text:wght@400..900&display=swap");
 @import "tailwindcss";
 
 /**
  * Tokens do Coredja.
  *
- * A paleta é escura por padrão: o painel fica num monitor lateral durante o
- * culto, num ambiente de luz baixa, e uma tela clara nessa situação cansa e
- * atrapalha quem opera. As telas das áreas seguem a mesma paleta para manter
- * a plataforma com cara de uma coisa só.
+ * Paleta e tipografia realinhadas ao Voluts (app de escala de igrejas que a
+ * ADJA já usa) em 19/08/2026 — pedido do Marcos para o Coredja ter a mesma
+ * linguagem visual de produto, já que quem vai usar reconhece esse estilo.
+ * Acento terracota (#E4814E) e fonte Golos Text vêm direto de lá.
+ *
+ * A tela continua escura por padrão: o painel fica num monitor lateral
+ * durante o culto, em luz baixa, e uma tela clara nessa situação cansa e
+ * atrapalha quem opera — esse motivo não mudou, só a cor em cima dele. O
+ * Voluts em si é claro (é um app de celular, uso pessoal); o Coredja escuro
+ * com o MESMO acento é a tradução certa para o contexto de mesa de som.
  */
 :root {
-  --fundo: #0e1116;
-  --fundo-elevado: #161b22;
-  --fundo-cartao: #1c232d;
-  --borda: #2a3441;
-  --borda-forte: #3a4757;
+  --fundo: #0f0d0b;
+  --fundo-elevado: #1a1712;
+  --fundo-cartao: #262019;
+  --borda: #3a3226;
+  --borda-forte: #4d4232;
 
-  --texto: #e8edf4;
-  --texto-suave: #97a4b6;
-  --texto-fraco: #6b7889;
+  --texto: #f5efe8;
+  --texto-suave: #b3a99d;
+  --texto-fraco: #7d7367;
 
-  --urgente: #f0503a;
-  --urgente-fundo: #2c1512;
-  --sucesso: #3fb27f;
-  --acento: #4a9eff;
+  --urgente: #e4574e;
+  --urgente-fundo: #2c1815;
+  --sucesso: #4caf7d;
+  --acento: #e4814e;
+  --acento-texto: #fee4d7;
 
-  --raio: 12px;
+  --raio: 10px;
 }
 
 @theme inline {
+  --font-sans: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --color-fundo: var(--fundo);
   --color-fundo-elevado: var(--fundo-elevado);
   --color-fundo-cartao: var(--fundo-cartao);
@@ -40,6 +49,7 @@
   --color-urgente-fundo: var(--urgente-fundo);
   --color-sucesso: var(--sucesso);
   --color-acento: var(--acento);
+  --color-acento-texto: var(--acento-texto);
 }
 
 html {
@@ -52,12 +62,7 @@ html {
 body {
   background: var(--fundo);
   color: var(--texto);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font-family: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 

@@ -40,7 +40,7 @@ export function ExecucaoCulto({ culto, onAvancar }: Props) {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-xl flex-col px-5 py-8">
+    <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
       <p className="text-xs text-texto-fraco">
         {new Date(`${culto.data}T00:00:00`).toLocaleDateString('pt-BR', {
           weekday: 'long',
@@ -88,8 +88,8 @@ export function ExecucaoCulto({ culto, onAvancar }: Props) {
         type="button"
         onClick={aoClicarAvancar}
         disabled={avancando || terminou}
-        className="mt-6 h-14 w-full rounded-xl text-base font-bold text-white disabled:opacity-50"
-        style={{ background: 'var(--acento)' }}
+        className="mt-6 h-14 w-full rounded-xl text-base font-bold disabled:opacity-50"
+        style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
       >
         {terminou
           ? 'Culto encerrado'

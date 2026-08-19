@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { ComponentType } from 'react';
+import { IconeAvisos, IconeCulto, IconeRecados } from './IconesMenu';
 
 /**
  * Menu lateral do Coredja.
@@ -18,17 +20,16 @@ import { usePathname } from 'next/navigation';
 interface ItemDeMenu {
   href: string;
   rotulo: string;
-  /** Emoji como ícone: sem dependência nova só para isto. */
-  icone: string;
+  Icone: ComponentType<{ className?: string }>;
   /** Rotas futuras já aparecem no menu, desativadas, para o conjunto ficar
    *  visível desde já — ver nota em `EM_BREVE` abaixo. */
   emBreve?: boolean;
 }
 
 const ITENS: ItemDeMenu[] = [
-  { href: '/painel', rotulo: 'Recados', icone: '💬' },
-  { href: '/culto', rotulo: 'Ordem do Culto', icone: '🎵' },
-  { href: '/avisos', rotulo: 'Avisos do Telão', icone: '📢' },
+  { href: '/painel', rotulo: 'Recados', Icone: IconeRecados },
+  { href: '/culto', rotulo: 'Ordem do Culto', Icone: IconeCulto },
+  { href: '/avisos', rotulo: 'Avisos do Telão', Icone: IconeAvisos },
   // Escala do Time oculta: a igreja já usa o Voluts para isso (19/08/2026).
   // O código continua em src/app/(app)/escala/ e src/lib/escala*.ts, caso
   // um dia volte a fazer sentido — só a entrada de menu foi removida.
@@ -62,7 +63,7 @@ export function MenuLateral() {
                   className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-texto-fraco opacity-60"
                   title="Ainda não construída"
                 >
-                  <span aria-hidden="true">{item.icone}</span>
+                  <item.Icone className="shrink-0" />
                   {item.rotulo}
                   <span className="ml-auto text-[10px] uppercase tracking-wide text-texto-fraco">
                     em breve
@@ -83,7 +84,7 @@ export function MenuLateral() {
                     : 'text-texto-suave hover:bg-fundo-cartao hover:text-texto'
                 }`}
               >
-                <span aria-hidden="true">{item.icone}</span>
+                <item.Icone className="shrink-0" />
                 {item.rotulo}
               </Link>
             </li>

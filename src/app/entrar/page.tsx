@@ -82,8 +82,8 @@ export default function PaginaEntrar() {
           <button
             type="submit"
             disabled={enviando}
-            className="mt-2 h-14 w-full rounded-xl text-base font-bold text-white disabled:opacity-60"
-            style={{ background: 'var(--acento)' }}
+            className="mt-2 h-14 w-full rounded-xl text-base font-bold disabled:opacity-60"
+            style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
           >
             {enviando ? 'Entrando…' : 'Entrar'}
           </button>

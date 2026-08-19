@@ -388,16 +388,16 @@ function BalaoDoPainel({
   return (
     <li className={`flex ${daArea ? 'justify-start' : 'justify-end'}`}>
       <div
-        className={`entrada max-w-[min(85%,44rem)] rounded-2xl border p-3.5 ${
+        className={`entrada max-w-[min(85%,44rem)] rounded-xl border-l-4 border-y border-r p-3.5 ${
           pulsa ? 'pulso-urgente' : ''
         }`}
         style={{
-          background:
-            daArea && urgente && !resolvido
-              ? 'var(--urgente-fundo)'
-              : 'var(--fundo-cartao)',
-          borderColor:
-            daArea && urgente && !resolvido ? 'var(--urgente)' : 'var(--borda)',
+          background: 'var(--fundo-cartao)',
+          borderLeftColor:
+            daArea && urgente && !resolvido ? 'var(--urgente)' : 'transparent',
+          borderTopColor: 'var(--borda)',
+          borderRightColor: 'var(--borda)',
+          borderBottomColor: 'var(--borda)',
           opacity: resolvido ? 0.62 : 1,
         }}
       >
@@ -535,8 +535,8 @@ function CampoDeResposta({
           <button
             type="submit"
             disabled={enviando || !texto.trim()}
-            className="h-12 shrink-0 rounded-xl px-5 text-sm font-bold text-white disabled:opacity-50"
-            style={{ background: 'var(--acento)' }}
+            className="h-12 shrink-0 rounded-xl px-5 text-sm font-bold disabled:opacity-50"
+            style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
           >
             {enviando ? 'Enviando…' : 'Enviar'}
           </button>

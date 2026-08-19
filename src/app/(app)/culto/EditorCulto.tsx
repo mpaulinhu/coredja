@@ -94,7 +94,7 @@ export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
   const emAndamento = culto?.blocoAtualId != null;
 
   return (
-    <div className="mx-auto flex h-full max-w-xl flex-col px-5 py-8">
+    <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
       <h1 className="text-2xl font-bold tracking-tight text-texto">
         Ordem do Culto
       </h1>
@@ -110,102 +110,104 @@ export function EditorCulto({ culto, onSalvar, onAvancar }: Props) {
         </div>
       )}
 
-      <label htmlFor="data" className="mt-6 mb-1.5 block text-sm text-texto-suave">
-        Data
-      </label>
-      <input
-        id="data"
-        type="date"
-        value={data}
-        onChange={(e) => {
-          setData(e.target.value);
-          setSalvo(false);
-        }}
-        className="w-full rounded-xl border border-borda bg-fundo-cartao px-3 py-2.5 text-[16px] text-texto"
-      />
+      <div className="mt-6 rounded-2xl border border-borda bg-fundo-elevado p-5 sm:p-6">
+        <label htmlFor="data" className="mb-1.5 block text-sm text-texto-suave">
+          Data
+        </label>
+        <input
+          id="data"
+          type="date"
+          value={data}
+          onChange={(e) => {
+            setData(e.target.value);
+            setSalvo(false);
+          }}
+          className="w-full rounded-xl border border-borda bg-fundo-cartao px-3 py-2.5 text-[16px] text-texto"
+        />
 
-      <div className="mt-6 flex items-center justify-between">
-        <span className="text-sm text-texto-suave">Blocos</span>
-        <span className="text-xs text-texto-fraco">{totalMinutos} min ao todo</span>
-      </div>
+        <div className="mt-6 flex items-center justify-between">
+          <span className="text-sm text-texto-suave">Blocos</span>
+          <span className="text-xs text-texto-fraco">{totalMinutos} min ao todo</span>
+        </div>
 
-      <ul className="mt-2 flex flex-col gap-2">
-        {blocos.map((bloco, i) => (
-          <li
-            key={bloco.id}
-            className="flex items-center gap-2 rounded-xl border border-borda bg-fundo-cartao px-3 py-2.5"
-          >
-            <div className="flex flex-col">
-              <button
-                type="button"
-                onClick={() => moverBloco(bloco.id, -1)}
-                disabled={i === 0}
-                aria-label="Mover para cima"
-                className="text-texto-fraco hover:text-texto disabled:opacity-30"
-              >
-                ▲
-              </button>
-              <button
-                type="button"
-                onClick={() => moverBloco(bloco.id, 1)}
-                disabled={i === blocos.length - 1}
-                aria-label="Mover para baixo"
-                className="text-texto-fraco hover:text-texto disabled:opacity-30"
-              >
-                ▼
-              </button>
-            </div>
-
-            <input
-              value={bloco.titulo}
-              onChange={(e) => atualizarBloco(bloco.id, 'titulo', e.target.value)}
-              placeholder="Ex: Louvor"
-              className="min-w-0 flex-1 bg-transparent text-[16px] text-texto placeholder:text-texto-fraco focus:outline-none"
-            />
-
-            <input
-              type="number"
-              min={0}
-              value={bloco.minutos}
-              onChange={(e) => atualizarBloco(bloco.id, 'minutos', e.target.value)}
-              aria-label="Minutos"
-              className="w-14 rounded-lg border border-borda bg-fundo px-2 py-1 text-right text-sm text-texto"
-            />
-            <span className="text-xs text-texto-fraco">min</span>
-
-            <button
-              type="button"
-              onClick={() => removerBloco(bloco.id)}
-              aria-label="Remover bloco"
-              className="text-texto-fraco hover:text-texto"
+        <ul className="mt-2 flex flex-col gap-2">
+          {blocos.map((bloco, i) => (
+            <li
+              key={bloco.id}
+              className="flex items-center gap-2 rounded-xl border border-borda bg-fundo-cartao px-3 py-2.5"
             >
-              ✕
-            </button>
-          </li>
-        ))}
-      </ul>
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => moverBloco(bloco.id, -1)}
+                  disabled={i === 0}
+                  aria-label="Mover para cima"
+                  className="text-texto-fraco hover:text-texto disabled:opacity-30"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moverBloco(bloco.id, 1)}
+                  disabled={i === blocos.length - 1}
+                  aria-label="Mover para baixo"
+                  className="text-texto-fraco hover:text-texto disabled:opacity-30"
+                >
+                  ▼
+                </button>
+              </div>
 
-      <button
-        type="button"
-        onClick={() => setBlocos((atuais) => [...atuais, novoBloco()])}
-        className="mt-3 h-11 w-full rounded-xl border border-dashed border-borda text-sm text-texto-suave hover:border-borda-forte hover:text-texto"
-      >
-        + Adicionar bloco
-      </button>
+              <input
+                value={bloco.titulo}
+                onChange={(e) => atualizarBloco(bloco.id, 'titulo', e.target.value)}
+                placeholder="Ex: Louvor"
+                className="min-w-0 flex-1 bg-transparent text-[16px] text-texto placeholder:text-texto-fraco focus:outline-none"
+              />
 
-      {erro && (
-        <p role="alert" className="mt-4 text-sm" style={{ color: 'var(--urgente)' }}>
-          {erro}
-        </p>
-      )}
+              <input
+                type="number"
+                min={0}
+                value={bloco.minutos}
+                onChange={(e) => atualizarBloco(bloco.id, 'minutos', e.target.value)}
+                aria-label="Minutos"
+                className="w-14 rounded-lg border border-borda bg-fundo px-2 py-1 text-right text-sm text-texto"
+              />
+              <span className="text-xs text-texto-fraco">min</span>
+
+              <button
+                type="button"
+                onClick={() => removerBloco(bloco.id)}
+                aria-label="Remover bloco"
+                className="text-texto-fraco hover:text-texto"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <button
+          type="button"
+          onClick={() => setBlocos((atuais) => [...atuais, novoBloco()])}
+          className="mt-3 h-11 w-full rounded-xl border border-dashed border-borda text-sm text-texto-suave hover:border-borda-forte hover:text-texto"
+        >
+          + Adicionar bloco
+        </button>
+
+        {erro && (
+          <p role="alert" className="mt-4 text-sm" style={{ color: 'var(--urgente)' }}>
+            {erro}
+          </p>
+        )}
+      </div>
 
       <div className="mt-6 flex gap-3">
         <button
           type="button"
           onClick={salvar}
           disabled={salvando}
-          className="h-14 flex-1 rounded-xl text-base font-bold text-white disabled:opacity-60"
-          style={{ background: 'var(--acento)' }}
+          className="h-14 flex-1 rounded-xl text-base font-bold disabled:opacity-60"
+          style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
         >
           {salvando ? 'Salvando…' : salvo ? 'Salvo ✓' : 'Publicar'}
         </button>

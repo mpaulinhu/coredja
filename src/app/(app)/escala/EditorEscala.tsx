@@ -147,8 +147,8 @@ export function EditorEscala({ escala, onSalvar, onMarcarPresenca }: Props) {
         type="button"
         onClick={salvar}
         disabled={salvando}
-        className="mt-6 h-14 w-full rounded-xl text-base font-bold text-white disabled:opacity-60"
-        style={{ background: 'var(--acento)' }}
+        className="mt-6 h-14 w-full rounded-xl text-base font-bold disabled:opacity-60"
+        style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
       >
         {salvando ? 'Salvando…' : salvo ? 'Salvo ✓' : 'Publicar escala'}
       </button>
