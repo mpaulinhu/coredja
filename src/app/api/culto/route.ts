@@ -22,7 +22,7 @@ export async function PUT(request: Request) {
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeFazer(pessoa.papel, 'culto:escrever')) {
+  if (!podeFazer(pessoa.papeis, 'culto:escrever')) {
     return Response.json(
       { erro: 'Seu papel não pode montar a ordem do culto.' },
       { status: 403 },

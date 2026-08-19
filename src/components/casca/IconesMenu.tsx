@@ -48,3 +48,14 @@ export function IconeAvisos({ className }: Props) {
     </svg>
   );
 }
+
+export function IconeUsuarios({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19c.7-3.4 3-5.2 5.5-5.2s4.8 1.8 5.5 5.2" />
+      <path d="M16 8.5a3 3 0 1 1 3.6 2.94" />
+      <path d="M15.5 13.6c2.1.4 3.7 2 4.3 4.7" />
+    </svg>
+  );
+}

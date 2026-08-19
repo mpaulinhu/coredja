@@ -29,9 +29,17 @@ const LIMITE_POR_CONVERSA = 80;
  * Monta a lista de conversas, ordenada por relevância para quem opera:
  * quem tem urgente primeiro, depois quem tem pendente, depois por atividade
  * mais recente. Assim o que precisa de ação nunca fica embaixo.
+ *
+ * `areasVisiveis`, se passado, restringe a lista aos slugs indicados — é
+ * como a permissão por área de `pessoa.areasVisiveis` (ver `papeis.ts`) se
+ * aplica aqui. Sem o parâmetro, monta todas: uso interno de quem já filtrou
+ * antes de chamar, nunca direto numa rota que atende pessoa logada.
  */
-export async function montarConversas(): Promise<Conversa[]> {
-  const areas = await store.listarAreas();
+export async function montarConversas(areasVisiveis?: string[]): Promise<Conversa[]> {
+  const todasAsAreas = await store.listarAreas();
+  const areas = areasVisiveis
+    ? todasAsAreas.filter((a) => areasVisiveis.includes(a.slug))
+    : todasAsAreas;
 
   const conversas = await Promise.all(
     areas.map(async (area): Promise<Conversa> => {

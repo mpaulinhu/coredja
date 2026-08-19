@@ -39,12 +39,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Papel de cada pessoa da igreja (líder, coordenador, operador) que faz
-    // login no Coredja publicado — ver `src/lib/papeis.ts` e `sessao.ts`.
-    // Fechada para o navegador dos dois lados: o servidor lê com o Admin SDK
-    // (que ignora estas regras) para conferir permissão a cada requisição, e
-    // é o único que escreve, quando um líder cadastra alguém. Uma pessoa
-    // nunca precisa consultar o Firestore diretamente para saber seu próprio
+    // Papéis e áreas visíveis de cada pessoa da igreja que faz login no
+    // Coredja publicado — ver `src/lib/papeis.ts`, `sessao.ts` e
+    // `pessoas-store.ts`. Fechada para o navegador dos dois lados: o
+    // servidor lê com o Admin SDK (que ignora estas regras) para conferir
+    // permissão a cada requisição, e é o único que escreve, quando um admin
+    // convida ou edita alguém em `src/app/api/pessoas/`. Uma pessoa nunca
+    // precisa consultar o Firestore diretamente para saber seu próprio
     // papel — a tela pergunta ao servidor, que já confere o token.
     match /pessoas/{uid} {
       allow read, write: if false;

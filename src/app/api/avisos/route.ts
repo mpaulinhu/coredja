@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeFazer(pessoa.papel, 'avisos:escrever')) {
+  if (!podeFazer(pessoa.papeis, 'avisos:escrever')) {
     return Response.json(
       { erro: 'Seu papel não pode cadastrar avisos.' },
       { status: 403 },

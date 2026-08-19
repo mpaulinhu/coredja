@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeFazer(pessoa.papel, 'culto:avancar') && !podeFazer(pessoa.papel, 'culto:escrever')) {
+  if (!podeFazer(pessoa.papeis, 'culto:avancar') && !podeFazer(pessoa.papeis, 'culto:escrever')) {
     return Response.json(
       { erro: 'Seu papel não pode avançar o culto.' },
       { status: 403 },

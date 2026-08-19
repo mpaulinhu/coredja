@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImagemAnexo } from '@/components/ImagemAnexo';
 import { useAlertaSonoro } from '@/hooks/useAlertaSonoro';
 import { useEventos } from '@/hooks/useEventos';
+import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
 import type { Conversa } from '@/lib/conversas';
 import { dataHora, hora, tempoDecorrido } from '@/lib/formatar';
 import type { Mensagem } from '@/lib/types';
@@ -45,7 +46,11 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
 
   const recarregar = useCallback(async () => {
     try {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return;
+
       const resposta = await fetch('/api/painel/mensagens', {
+        headers: cabecalho,
         cache: 'no-store',
       });
       if (!resposta.ok) return;
@@ -115,9 +120,12 @@ export function PainelAudiovisual({ conversasIniciais }: Props) {
     );
 
     try {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return;
+
       await fetch(`/api/painel/mensagens/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
         body: JSON.stringify({ acao }),
       });
     } catch {
@@ -477,9 +485,15 @@ function CampoDeResposta({
     setEnviando(true);
     setErro(null);
     try {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) {
+        setErro('Sessão expirada. Recarregue a página.');
+        return;
+      }
+
       const resposta = await fetch('/api/painel/mensagens', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
         body: JSON.stringify({ areaSlug, texto: conteudo }),
       });
       if (!resposta.ok) {

@@ -1,0 +1,177 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
+import type { Papel, Pessoa } from '@/lib/papeis';
+import { FormularioConvite } from './FormularioConvite';
+import { LinhaPessoa } from './LinhaPessoa';
+
+export interface AreaResumo {
+  slug: string;
+  nome: string;
+  cor: string;
+}
+
+export const TODOS_OS_PAPEIS: { valor: Papel; rotulo: string }[] = [
+  { valor: 'admin', rotulo: 'Admin' },
+  { valor: 'lider', rotulo: 'Líder' },
+  { valor: 'coordenador', rotulo: 'Coordenador' },
+  { valor: 'operador', rotulo: 'Operador' },
+];
+
+/**
+ * Gerenciar Usuários: quem tem login, com que papéis, e quais áreas de
+ * recado cada um enxerga no Painel.
+ *
+ * Diferente de Culto/Avisos, esta tela não tem "modo de leitura" — só quem
+ * já tem `pessoas:escrever` chega até ela (a rota nega 403 pra quem não
+ * tem, e o item some do menu — ver `MenuLateral.tsx`). Não há por que
+ * desenhar um segundo modo que ninguém vai ver.
+ */
+export function TelaUsuarios() {
+  const [pessoas, setPessoas] = useState<Pessoa[] | undefined>(undefined);
+  const [areas, setAreas] = useState<AreaResumo[]>([]);
+  const [erro, setErro] = useState<string | null>(null);
+  const [senhaGerada, setSenhaGerada] = useState<{ email: string; senha: string } | null>(null);
+
+  const carregar = useCallback(async () => {
+    const cabecalho = await cabecalhoDeAutorizacao();
+    if (!cabecalho) {
+      setErro('Sessão expirada. Recarregue a página.');
+      return;
+    }
+    const resp = await fetch('/api/pessoas', { headers: cabecalho });
+    const dados = await resp.json();
+    if (!resp.ok) {
+      setErro(dados.erro ?? 'Não foi possível carregar.');
+      return;
+    }
+    setPessoas(dados.pessoas);
+    setAreas(dados.areas);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      await carregar();
+    })();
+  }, [carregar]);
+
+  const convidar = useCallback(
+    async (nome: string, email: string, papeis: Papel[], areasVisiveis: string[]) => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return { ok: false as const, erro: 'Sessão expirada.' };
+
+      const resp = await fetch('/api/pessoas', {
+        method: 'POST',
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, email, papeis, areasVisiveis }),
+      });
+      const dados = await resp.json();
+      if (!resp.ok) return { ok: false as const, erro: dados.erro ?? 'Falha ao convidar.' };
+
+      setSenhaGerada({ email, senha: dados.pessoa.senhaTemporaria });
+      await carregar();
+      return { ok: true as const };
+    },
+    [carregar],
+  );
+
+  const atualizar = useCallback(
+    async (uid: string, papeis: Papel[], areasVisiveis: string[]) => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return;
+      await fetch(`/api/pessoas/${uid}`, {
+        method: 'PUT',
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ papeis, areasVisiveis }),
+      });
+      await carregar();
+    },
+    [carregar],
+  );
+
+  const remover = useCallback(
+    async (uid: string) => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return;
+      const resp = await fetch(`/api/pessoas/${uid}`, {
+        method: 'DELETE',
+        headers: cabecalho,
+      });
+      const dados = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setErro(dados.erro ?? 'Não foi possível remover.');
+        return;
+      }
+      await carregar();
+    },
+    [carregar],
+  );
+
+  if (pessoas === undefined) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-texto-fraco">Carregando…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
+      <h1 className="text-2xl font-bold tracking-tight text-texto">Usuários</h1>
+      <p className="mt-1 text-sm text-texto-suave">
+        Quem tem login no Coredja, o que cada um pode fazer, e quais áreas de
+        recado enxerga.
+      </p>
+
+      {erro && (
+        <p role="alert" className="mt-3 text-sm" style={{ color: 'var(--urgente)' }}>
+          {erro}
+        </p>
+      )}
+
+      {senhaGerada && (
+        <div
+          className="mt-4 rounded-xl border px-4 py-3 text-sm"
+          style={{ borderColor: 'var(--acento)', color: 'var(--texto)' }}
+        >
+          <p className="font-semibold">Conta criada para {senhaGerada.email}</p>
+          <p className="mt-1 text-texto-suave">
+            Senha temporária: <span className="font-mono text-texto">{senhaGerada.senha}</span>
+          </p>
+          <p className="mt-1 text-xs text-texto-fraco">
+            Anote agora — ela não fica salva e não aparece de novo. Repasse à
+            pessoa; ela pode trocar depois em &quot;esqueci a senha&quot;.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSenhaGerada(null)}
+            className="mt-2 text-xs text-texto-suave hover:text-texto"
+          >
+            Ok, anotei
+          </button>
+        </div>
+      )}
+
+      <div className="mt-6 rounded-2xl border border-borda bg-fundo-elevado p-5 sm:p-6">
+        <h2 className="text-sm font-semibold text-texto-suave">Convidar pessoa</h2>
+        <FormularioConvite areas={areas} onConvidar={convidar} />
+      </div>
+
+      <ul className="mt-6 flex flex-col gap-2">
+        {pessoas.length === 0 && (
+          <p className="text-sm text-texto-fraco">Nenhuma pessoa cadastrada ainda.</p>
+        )}
+        {pessoas.map((p) => (
+          <LinhaPessoa
+            key={p.uid}
+            pessoa={p}
+            areas={areas}
+            onAtualizar={(papeis, areasVisiveis) => atualizar(p.uid, papeis, areasVisiveis)}
+            onRemover={() => remover(p.uid)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}

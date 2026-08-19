@@ -3,6 +3,14 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestoreDb } from './firebase';
 import type { Papel, Pessoa } from './papeis';
 
+/** Formato do documento de pessoa no Firestore. */
+interface DocPessoa {
+  nome: string;
+  email: string;
+  papeis: Papel[];
+  areasVisiveis?: string[];
+}
+
 /**
  * Confere quem é a pessoa por trás de uma requisição, do lado do servidor.
  *
@@ -51,6 +59,12 @@ export async function pessoaDaRequisicao(request: Request): Promise<Pessoa | nul
   const doc = await getFirestoreDb().collection(COLECAO_PESSOAS).doc(uid).get();
   if (!doc.exists) return null;
 
-  const dados = doc.data() as { nome: string; email: string; papel: Papel };
-  return { uid, nome: dados.nome, email: dados.email, papel: dados.papel };
+  const dados = doc.data() as DocPessoa;
+  return {
+    uid,
+    nome: dados.nome,
+    email: dados.email,
+    papeis: dados.papeis ?? [],
+    areasVisiveis: dados.areasVisiveis ?? [],
+  };
 }

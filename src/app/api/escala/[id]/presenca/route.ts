@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
  * `avisos/[id]/telao`: permissão diferente — quem opera no domingo confirma
  * presença sem poder reescrever a escala que o coordenador montou.
  */
-function podeConfirmarPresenca(papel: Papel): boolean {
-  return podeFazer(papel, 'escala:presenca') || podeFazer(papel, 'escala:escrever');
+function podeConfirmarPresenca(papeis: Papel[]): boolean {
+  return podeFazer(papeis, 'escala:presenca') || podeFazer(papeis, 'escala:escrever');
 }
 
 export async function POST(
@@ -22,7 +22,7 @@ export async function POST(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeConfirmarPresenca(pessoa.papel)) {
+  if (!podeConfirmarPresenca(pessoa.papeis)) {
     return Response.json(
       { erro: 'Seu papel não pode confirmar presença.' },
       { status: 403 },

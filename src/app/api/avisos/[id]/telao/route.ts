@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
  * pela mesma razão de `culto/avancar`: a permissão é outra — quem opera no
  * domingo publica sem precisar poder cadastrar ou apagar aviso.
  */
-function podeOperarTelao(papel: Papel): boolean {
-  return podeFazer(papel, 'avisos:publicar') || podeFazer(papel, 'avisos:escrever');
+function podeOperarTelao(papeis: Papel[]): boolean {
+  return podeFazer(papeis, 'avisos:publicar') || podeFazer(papeis, 'avisos:escrever');
 }
 
 export async function POST(
@@ -21,7 +21,7 @@ export async function POST(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeOperarTelao(pessoa.papel)) {
+  if (!podeOperarTelao(pessoa.papeis)) {
     return Response.json({ erro: 'Seu papel não pode publicar no telão.' }, { status: 403 });
   }
 
@@ -38,7 +38,7 @@ export async function DELETE(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeOperarTelao(pessoa.papel)) {
+  if (!podeOperarTelao(pessoa.papeis)) {
     return Response.json({ erro: 'Seu papel não pode alterar o telão.' }, { status: 403 });
   }
 

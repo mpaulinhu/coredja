@@ -21,9 +21,11 @@
  */
 
 /**
- * Os quatro papéis do Coredja publicado, do mais para o menos amplo.
+ * Os cinco papéis do Coredja publicado, do mais para o menos amplo.
  *
- * - `lider`: monta a ordem do culto e os avisos, cadastra outras pessoas.
+ * - `admin`: gerencia quem tem conta e o que cada pessoa pode ver — a única
+ *   coisa que o admin faz é cuidar de gente, não de conteúdo do dia a dia.
+ * - `lider`: monta a ordem do culto e os avisos.
  * - `coordenador`: monta a escala do time.
  * - `operador`: só executa no domingo — avança a ordem, publica o aviso no
  *   telão, marca presença. Não edita o que foi preparado na semana.
@@ -31,15 +33,30 @@
  *   confere permissão poder tratar link-de-área e login-de-pessoa de forma
  *   parecida quando fizer sentido. A maioria das checagens não vai usar isto.
  */
-export type Papel = 'lider' | 'coordenador' | 'operador' | 'area';
+export type Papel = 'admin' | 'lider' | 'coordenador' | 'operador' | 'area';
 
-/** Uma pessoa com login no Coredja. */
+/**
+ * Uma pessoa com login no Coredja.
+ *
+ * `papeis` é uma lista, não um valor só: numa igreja pequena a mesma pessoa
+ * costuma acumular funções (ex: quem lidera também administra o acesso dos
+ * outros). Uma pessoa tem uma ação liberada se QUALQUER papel na lista
+ * permitir — ver `podeFazer`.
+ *
+ * `areasVisiveis` é só para a tela de Recados — controla quais conversas
+ * (Cantina, Kids, ...) a pessoa enxerga no Painel. Vazio ou ausente
+ * significa nenhuma área liberada, não "todas": é mais seguro que uma
+ * pessoa nova comece sem ver nada e o admin libere explicitamente, do que
+ * ela nascer vendo tudo por engano numa lista esquecida.
+ */
 export interface Pessoa {
   /** UID do Firebase Authentication — é também o id do documento. */
   uid: string;
   nome: string;
   email: string;
-  papel: Papel;
+  papeis: Papel[];
+  /** Slugs das áreas (ver `areas.ts`) cujos recados esta pessoa pode ver. */
+  areasVisiveis?: string[];
 }
 
 /**
@@ -48,13 +65,14 @@ export interface Pessoa {
  * não caçar todo lugar que checa papel.
  */
 const PERMISSOES: Record<Papel, readonly string[]> = {
-  lider: ['culto:escrever', 'avisos:escrever', 'pessoas:escrever'],
+  admin: ['pessoas:escrever'],
+  lider: ['culto:escrever', 'avisos:escrever'],
   coordenador: ['escala:escrever'],
   operador: ['culto:avancar', 'avisos:publicar', 'escala:presenca'],
   area: [],
 };
 
-/** Se o papel tem permissão para a ação. Ações não listadas são negadas. */
-export function podeFazer(papel: Papel, acao: string): boolean {
-  return PERMISSOES[papel]?.includes(acao) ?? false;
+/** Se algum dos papéis da pessoa tem permissão para a ação. */
+export function podeFazer(papeis: Papel[], acao: string): boolean {
+  return papeis.some((papel) => PERMISSOES[papel]?.includes(acao) ?? false);
 }

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ComponentType } from 'react';
-import { IconeAvisos, IconeCulto, IconeRecados } from './IconesMenu';
+import { useEffect, useState, type ComponentType } from 'react';
+import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
+import { IconeAvisos, IconeCulto, IconeRecados, IconeUsuarios } from './IconesMenu';
 
 /**
  * Menu lateral do Coredja.
@@ -35,8 +36,31 @@ const ITENS: ItemDeMenu[] = [
   // um dia volte a fazer sentido — só a entrada de menu foi removida.
 ];
 
+const ITEM_USUARIOS: ItemDeMenu = {
+  href: '/usuarios',
+  rotulo: 'Usuários',
+  Icone: IconeUsuarios,
+};
+
 export function MenuLateral() {
   const caminho = usePathname();
+
+  // "Usuários" só aparece para quem tem `pessoas:escrever` (admin). O menu
+  // não sabe o papel de quem está logado — pergunta ao servidor tentando a
+  // mesma rota que a tela usa; 200 confirma acesso, 403 esconde o item. É o
+  // mesmo "pergunte fazendo" de `TelaCulto`: uma fonte de verdade só, não
+  // duas checagens de permissão que podem um dia divergir.
+  const [ehAdmin, setEhAdmin] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return;
+      const resp = await fetch('/api/pessoas', { headers: cabecalho });
+      setEhAdmin(resp.ok);
+    })();
+  }, []);
+
+  const itens = ehAdmin ? [...ITENS, ITEM_USUARIOS] : ITENS;
 
   return (
     <nav
@@ -53,7 +77,7 @@ export function MenuLateral() {
       </div>
 
       <ul className="flex flex-col gap-1 px-3">
-        {ITENS.map((item) => {
+        {itens.map((item) => {
           const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
 
           if (item.emBreve) {
