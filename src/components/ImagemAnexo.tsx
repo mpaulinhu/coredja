@@ -4,6 +4,13 @@ import { useState } from 'react';
 import type { Anexo } from '@/lib/types';
 
 /**
+ * O que a miniatura de fato precisa: o nome (para o title/alt/download) e a
+ * URL. Aceitar só esses dois campos deixa o componente servir tanto ao
+ * `Anexo` de um recado quanto à imagem de um aviso, que não tem `id`.
+ */
+type ImagemExibivel = Pick<Anexo, 'nomeArquivo' | 'url'>;
+
+/**
  * Miniatura de uma imagem anexada a um recado.
  *
  * Trata o caso de a imagem não existir mais. Isso é possível porque os
@@ -19,7 +26,7 @@ export function ImagemAnexo({
   tamanho,
   mostrarDownload = false,
 }: {
-  anexo: Anexo;
+  anexo: ImagemExibivel;
   /** Classes de dimensão da miniatura (ex: "h-32 w-32"). */
   tamanho: string;
   mostrarDownload?: boolean;

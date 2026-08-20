@@ -1,5 +1,5 @@
 import { getFirestoreDb } from './firebase';
-import type { Aviso, NovoAviso, StoreAvisos } from './avisos';
+import { normalizarAviso, type Aviso, type NovoAviso, type StoreAvisos } from './avisos';
 
 /**
  * Implementação de `StoreAvisos` sobre o Cloud Firestore.
@@ -18,14 +18,24 @@ export const avisosStore: StoreAvisos = {
   async listar() {
     const snap = await colecao().get();
     return snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }) as Aviso)
+      .map((d) => normalizarAviso({ id: d.id, ...d.data() }))
       .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
   },
 
+  async buscar(id: string) {
+    const doc = await colecao().doc(id).get();
+    if (!doc.exists) return null;
+    return normalizarAviso({ id: doc.id, ...doc.data() });
+  },
+
   async criar(dados: NovoAviso, autor: string) {
+    // `imagem` só entra no documento quando existe: o Firestore recusa
+    // `undefined` como valor de campo.
     const doc: Omit<Aviso, 'id'> = {
       titulo: dados.titulo,
       texto: dados.texto,
+      ...(dados.imagem ? { imagem: dados.imagem } : {}),
+      dias: dados.dias,
       noAr: false,
       criadoPor: autor,
       criadoEm: new Date().toISOString(),
