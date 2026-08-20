@@ -18,16 +18,12 @@ interface Props {
 const DURACAO_DO_AVISO_MS = 2000;
 
 /**
- * Escrever na hora: a caixa para o texto que não estava previsto.
+ * A caixa de escrever da tela — uma só, para os dois caminhos.
  *
- * É o primeiro bloco da tela de propósito. A biblioteca cobre o que se
- * repete todo domingo; isto cobre o resto — "o culto começa em 5 minutos",
- * "o link do formulário é este" — sem obrigar ninguém a cadastrar algo que
- * vai usar uma vez só.
- *
- * "Guardar como fixa" fica ao lado de "Copiar", e não numa tela separada,
- * porque é exatamente aqui que se descobre que um texto avulso virou hábito:
- * na terceira vez que a pessoa digita a mesma frase.
+ * Escreve-se o texto e decide-se ali: copiar agora (o recado de hoje, que
+ * não se repete) ou guardar na lista (o que volta todo domingo). Havia um
+ * segundo bloco separado só para cadastrar, pedindo o mesmo texto e a mesma
+ * categoria — duas caixas para a mesma frase, e a dúvida de qual usar.
  */
 export function EscreverNaHora({ onCopiar, onSalvar }: Props) {
   const [texto, setTexto] = useState('');
@@ -77,14 +73,14 @@ export function EscreverNaHora({ onCopiar, onSalvar }: Props) {
 
   return (
     <div className="rounded-2xl border border-borda bg-fundo-elevado p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-texto-suave">Escrever na hora</h2>
+      <h2 className="text-sm font-semibold text-texto-suave">Escrever mensagem</h2>
 
       <textarea
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
-        placeholder="Digite e copie, sem cadastrar nada."
-        rows={2}
-        aria-label="Mensagem para copiar agora"
+        placeholder="Ex: Seja bem-vindo! Deixe seu like e compartilhe com um amigo."
+        rows={3}
+        aria-label="Mensagem para copiar ou guardar"
         className="mt-2 w-full resize-none rounded-lg border border-borda bg-fundo-cartao px-3 py-2.5 text-[16px] text-texto placeholder:text-texto-fraco"
       />
 
@@ -115,22 +111,29 @@ export function EscreverNaHora({ onCopiar, onSalvar }: Props) {
             disabled={guardando || !limpo}
             className="h-11 shrink-0 rounded-lg border border-borda-forte px-4 text-sm font-semibold text-texto disabled:opacity-50"
           >
-            {guardando ? 'Guardando…' : 'Guardar como fixa'}
+            {guardando ? 'Guardando…' : 'Guardar na lista'}
           </button>
         )}
       </div>
 
       {/* A categoria só faz sentido para quem pode guardar — para os demais
-          seria um campo que não leva a lugar nenhum. */}
+          seria um campo que não leva a lugar nenhum. Só é usada ao guardar;
+          copiar ignora. */}
       {onSalvar && (
-        <input
-          value={categoria}
-          onChange={(e) => setCategoria(e.target.value)}
-          list="categorias-sugeridas"
-          placeholder="Categoria ao guardar (opcional)"
-          aria-label="Categoria da mensagem ao guardar"
-          className="mt-2 w-full rounded-lg border border-borda bg-fundo-cartao px-3 py-2.5 text-[16px] text-texto placeholder:text-texto-fraco"
-        />
+        <>
+          <input
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            list="categorias-sugeridas"
+            placeholder="Categoria (ex: Abertura, Ofertas)"
+            aria-label="Categoria da mensagem ao guardar"
+            className="mt-2 w-full rounded-lg border border-borda bg-fundo-cartao px-3 py-2.5 text-[16px] text-texto placeholder:text-texto-fraco"
+          />
+          <p className="mt-1 text-xs text-texto-fraco">
+            A categoria vale ao guardar — a lista se agrupa sozinha pelo que for
+            digitado.
+          </p>
+        </>
       )}
 
       {problema && (

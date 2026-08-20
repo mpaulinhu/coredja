@@ -15,7 +15,6 @@ import { Recado } from '@/components/Recado';
 import { CartaoDaMensagem, SugestoesDeCategoria } from './CartaoDaMensagem';
 import { copiarTexto } from './copiar';
 import { EscreverNaHora } from './EscreverNaHora';
-import { FormularioMensagem } from './FormularioMensagem';
 
 /** Quanto tempo o "Copiado!" fica na tela antes de sumir sozinho. */
 const DURACAO_DO_AVISO_MS = 2000;
@@ -215,7 +214,10 @@ export function TelaAoVivo() {
 
       {recado && <Recado texto={recado} onDispensar={() => setRecado(null)} />}
 
-      <div className="mx-auto mt-4 flex max-w-3xl flex-col gap-3">
+      {/* Um campo só: escrever e decidir ali mesmo se copia ou guarda. Havia
+          um segundo bloco de cadastro, que pedia o mesmo texto e a mesma
+          categoria — duas caixas para a mesma frase. */}
+      <div className="mx-auto mt-4 max-w-3xl">
         <EscreverNaHora
           onCopiar={async (texto) => {
             const resultado = await copiarTexto(texto);
@@ -228,8 +230,6 @@ export function TelaAoVivo() {
           }}
           onSalvar={podeEditar ? criar : undefined}
         />
-
-        {podeEditar && <FormularioMensagem onCriar={criar} />}
       </div>
 
       {/* Filtro por categoria: rola na horizontal no celular em vez de
