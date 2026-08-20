@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  normalizarEnderecoDoHolyrics,
+} from '@/lib/configuracoes-compartilhado';
 import type {
   ConfiguracoesParaTela,
   OrigemDoValor,
@@ -57,12 +60,15 @@ export function CartaoHolyrics({
   // monta o cartão de novo e `useState` renasce com o valor certo.
 
   // Normaliza do MESMO jeito que o servidor antes de comparar (ver o PUT em
-  // `/api/configuracoes`). Sem isto, digitar "http://x:8091/" e salvar grava
-  // "http://x:8091" — igual ao que já valia — e a tela fica achando que
-  // ainda há mudança pendente, com o botão Salvar aceso para sempre e a
-  // barra sobrando no campo. A `key` também não remonta o cartão nesse caso,
-  // porque o valor resolvido não mudou de fato.
-  const urlNormalizada = url.trim().replace(/\/+$/, '');
+  // `/api/configuracoes`). Faz duas coisas:
+  //
+  // 1. Completa o que falta — digitar "192.168.50.103:8091", que é como o
+  //    Holyrics mostra o endereço, vira "http://192.168.50.103:8091" em vez
+  //    de virar erro.
+  // 2. Iguala a comparação: sem isto, digitar "http://x:8091/" e salvar grava
+  //    "http://x:8091" — igual ao que já valia — e a tela fica achando que
+  //    ainda há mudança pendente, com o botão Salvar aceso para sempre.
+  const urlNormalizada = normalizarEnderecoDoHolyrics(url);
   const urlMudou = urlNormalizada !== holyrics.url.valor;
   const tokenMudou = trocandoToken && tokenNovo.trim().length > 0;
   const temMudanca = urlMudou || tokenMudou;
@@ -136,10 +142,27 @@ export function CartaoHolyrics({
               autoComplete="off"
               className="mt-1.5 w-full rounded-lg border border-borda bg-fundo-cartao px-3 py-2.5 font-mono text-[15px] text-texto placeholder:text-texto-fraco"
             />
+            {/* Esse endereço não é um site: o API Server responde 404 com
+                corpo vazio na raiz, e o navegador mostra "Não é possível
+                acessar esse site" (ERR_INVALID_RESPONSE) mesmo com tudo
+                certo. Aconteceu no uso real — quem conferiu no navegador
+                concluiu que o IP estava errado e foi mexer no que
+                funcionava. O teste que vale é o botão aqui do lado. */}
+            <p className="mt-1.5 text-xs text-texto-fraco">
+              <strong className="font-semibold text-texto-suave">
+                Não tente abrir esse endereço no navegador.
+              </strong>{' '}
+              Ele não é um site — só aceita comandos, e o navegador vai dizer
+              que não conseguiu acessar mesmo quando está tudo certo. Use o
+              &ldquo;Testar conexão&rdquo; para conferir.
+            </p>
+
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
               <Origem origem={holyrics.url.origem} />
               <span className="text-xs text-texto-fraco">
-                O IP do computador onde o Holyrics está aberto, com a porta.
+                O IP do computador onde o Holyrics está aberto, com a porta. Pode
+                escrever só <code className="font-mono">192.168.0.10:8091</code>{' '}
+                — o resto se completa sozinho.
               </span>
             </div>
           </div>

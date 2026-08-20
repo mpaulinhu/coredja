@@ -5,6 +5,7 @@ import {
   salvarConfiguracoes,
 } from '@/lib/configuracoes';
 import {
+  normalizarEnderecoDoHolyrics,
   problemaNoEnderecoDoHolyrics,
   type ConfiguracoesParaTela,
   type Pendencia,
@@ -128,7 +129,9 @@ export async function PUT(request: Request) {
   const mudancas: { holyricsUrl?: string; holyricsToken?: string } = {};
 
   if (typeof corpo.holyricsUrl === 'string') {
-    const url = corpo.holyricsUrl.trim().replace(/\/+$/, '');
+    // Normaliza também aqui, e não só na tela: a rota é a fronteira de
+    // verdade, e o endereço pode chegar de outro caminho que não o formulário.
+    const url = normalizarEnderecoDoHolyrics(corpo.holyricsUrl);
     const problema = problemaNoEnderecoDoHolyrics(url);
     if (problema) return Response.json({ erro: problema }, { status: 400 });
     mudancas.holyricsUrl = url;

@@ -96,7 +96,54 @@ export const ACOES_DO_HOLYRICS: { acao: string; paraQue: string }[] = [
   },
 ];
 
-/** Confere um endereço antes de gravar. Devolve o problema, ou null. */
+/**
+ * Arruma o endereço digitado antes de conferir se ele serve.
+ *
+ * Existe porque a forma natural de escrever isso é `192.168.50.103:8091` — é
+ * o que o Holyrics mostra na tela do API Server, e é o que qualquer pessoa
+ * digita. Exigir o `http://` na mão e devolver "Endereço inválido" para quem
+ * escreveu o IP certo é o sistema cobrando cerimônia por uma coisa que ele
+ * mesmo sabe completar.
+ *
+ * O que é consertado sozinho, sem reclamar:
+ *
+ * - `192.168.50.103:8091`  → ganha `http://` na frente
+ * - `http//` e `http:/`    → viram `http://` (escorregão comum de digitação)
+ * - espaços no meio        → removidos (colar de PDF/WhatsApp costuma trazer)
+ * - barra(s) no fim        → removidas
+ *
+ * O que NÃO se conserta é a porta ausente: `192.168.50.103` sozinho pode ser
+ * um endereço legítimo em qualquer porta, e chutar 8091 esconderia um erro
+ * de digitação atrás de um timeout de 5 segundos no domingo.
+ */
+export function normalizarEnderecoDoHolyrics(url: string): string {
+  // `\s` cobre o espaço comum e também o espaço-duro (U+00A0), que é o que
+  // vem colado quando o endereço passou por PDF ou por mensagem formatada.
+  let limpo = url.trim().replace(/[\s ]+/g, '');
+  if (!limpo) return '';
+
+  // Escorregões no esquema, antes de decidir se falta o esquema inteiro.
+  limpo = limpo.replace(/^(https?):\/{3,}/i, '$1://');
+  limpo = limpo.replace(/^(https?):\/(?!\/)/i, '$1://');
+  limpo = limpo.replace(/^(https?)\/\//i, '$1://');
+  limpo = limpo.replace(/^(https?):(?![/])/i, '$1://');
+
+  // Sem esquema nenhum: assume http, que é o que o API Server do Holyrics
+  // usa na rede local (ele não serve https).
+  if (!/^https?:\/\//i.test(limpo)) {
+    limpo = `http://${limpo}`;
+  }
+
+  return limpo.replace(/\/+$/, '');
+}
+
+/**
+ * Confere um endereço antes de gravar. Devolve o problema, ou null.
+ *
+ * Recebe o endereço JÁ passado por `normalizarEnderecoDoHolyrics` — o que
+ * sobra aqui são os casos que não dá para adivinhar sem arriscar esconder um
+ * erro de digitação.
+ */
 export function problemaNoEnderecoDoHolyrics(url: string): string | null {
   const limpo = url.trim();
   if (!limpo) return null; // vazio é válido: desliga a integração
@@ -105,17 +152,17 @@ export function problemaNoEnderecoDoHolyrics(url: string): string | null {
   try {
     alvo = new URL(limpo);
   } catch {
-    return 'Endereço inválido. Ele precisa começar com http:// e incluir a porta — ex: http://192.168.0.10:8091';
+    return 'Não consegui entender esse endereço. O formato é o IP do computador com a porta — ex: 192.168.0.10:8091';
   }
 
   if (alvo.protocol !== 'http:' && alvo.protocol !== 'https:') {
-    return 'O endereço precisa começar com http:// ou https://';
+    return 'O endereço precisa ser http:// ou https://';
   }
 
   // O API Server do Holyrics não roda na 80/443: sem porta explícita é quase
   // sempre alguém que colou só o IP e vai levar timeout sem entender por quê.
   if (!alvo.port) {
-    return 'Falta a porta no endereço. No Holyrics ela aparece em Configurações → API Server — normalmente 8091.';
+    return `Falta a porta no fim do endereço — normalmente 8091, então ficaria ${alvo.host}:8091. No Holyrics ela aparece em Configurações → API Server.`;
   }
 
   return null;
