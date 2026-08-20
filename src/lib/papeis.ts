@@ -99,7 +99,13 @@ const PERMISSOES_PROPRIAS: Record<Exclude<Papel, 'area'>, readonly string[]> = {
   // 'pessoas:escrever': não herda para os demais cargos.
   admin: ['pessoas:escrever', 'departamentos:escrever'],
   lider: ['culto:escrever', 'avisos:escrever'],
-  coordenador: ['escala:escrever'],
+  // 'live:escrever' fica no coordenador, e não no lider como
+  // 'avisos:escrever': quem mantém a biblioteca de mensagens da transmissão
+  // é o time técnico (audiovisual), não quem prepara o culto. Operador
+  // continua de fora — ele COPIA sem permissão nenhuma (copiar é leitura,
+  // ver `GET /api/live/mensagens`) e escreve na hora pelo campo avulso da
+  // tela, que não grava nada.
+  coordenador: ['escala:escrever', 'live:escrever'],
   operador: ['culto:avancar', 'avisos:publicar', 'escala:presenca'],
 };
 

@@ -91,6 +91,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Mensagens prontas para colar no chat da transmissão ao vivo — ver
+    // `src/lib/live.ts`. Mesma lógica de `avisos`: leitura aberta porque é o
+    // navegador de quem opera a live que escuta o Firestore direto, para a
+    // biblioteca aparecer atualizada sem F5 no meio da transmissão; escrita
+    // só pelo servidor, que confere `live:escrever` (coordenador) antes de
+    // gravar — ver `src/app/api/live/`.
+    //
+    // Texto de boas-vindas e de oferta não é dado sensível: é exatamente o
+    // que já vai aparecer público no chat do YouTube segundos depois.
+    match /mensagens_live/{mensagem} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Qualquer outra coleção fica fechada por padrão. Sem este bloco, uma
     // coleção nova criada no futuro herdaria o comportamento errado.
     match /{documento=**} {
