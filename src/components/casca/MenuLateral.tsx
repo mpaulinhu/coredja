@@ -2,18 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
-import {
-  IconeAoVivo,
-  IconeAvisos,
-  IconeConfiguracoes,
-  IconeCulto,
-  IconeDepartamentos,
-  IconeFechar,
-  IconeRecados,
-  IconeUsuarios,
-} from './IconesMenu';
+import { IconeFechar } from './IconesMenu';
 import { EquipeDeHoje } from './EquipeDeHoje';
 
 /**
@@ -37,22 +28,21 @@ import { EquipeDeHoje } from './EquipeDeHoje';
 interface ItemDeMenu {
   href: string;
   rotulo: string;
-  Icone: ComponentType<{ className?: string }>;
   /** Rotas futuras já aparecem no menu, desativadas, para o conjunto ficar
    *  visível desde já — ver nota em `EM_BREVE` abaixo. */
   emBreve?: boolean;
 }
 
 const ITENS: ItemDeMenu[] = [
-  { href: '/painel', rotulo: 'Recados', Icone: IconeRecados },
-  { href: '/culto', rotulo: 'Ordem do Culto', Icone: IconeCulto },
-  { href: '/avisos', rotulo: 'Avisos do Telão', Icone: IconeAvisos },
+  { href: '/painel', rotulo: 'Recados' },
+  { href: '/culto', rotulo: 'Ordem do Culto' },
+  { href: '/avisos', rotulo: 'Avisos do Telão' },
   // Logo abaixo de Avisos do Telão: são os dois itens do domingo em que
   // alguém pega um texto pronto e o publica em algum lugar — um no telão da
   // igreja, outro no chat da transmissão. Visível a todo mundo logado, e não
   // só a quem cadastra, porque copiar é o uso principal da tela e não exige
   // permissão nenhuma.
-  { href: '/ao-vivo', rotulo: 'Ao Vivo', Icone: IconeAoVivo },
+  { href: '/ao-vivo', rotulo: 'Ao Vivo' },
   // Escala do Time oculta: a igreja já usa o Voluts para isso (19/08/2026).
   // O código continua em src/app/(app)/escala/ e src/lib/escala*.ts, caso
   // um dia volte a fazer sentido — só a entrada de menu foi removida.
@@ -60,11 +50,11 @@ const ITENS: ItemDeMenu[] = [
 
 /** Itens que só o admin vê — ver `ehAdmin` abaixo. */
 const ITENS_DE_ADMIN: ItemDeMenu[] = [
-  { href: '/usuarios', rotulo: 'Usuários', Icone: IconeUsuarios },
-  { href: '/departamentos', rotulo: 'Departamentos', Icone: IconeDepartamentos },
+  { href: '/usuarios', rotulo: 'Usuários' },
+  { href: '/departamentos', rotulo: 'Departamentos' },
   // Por último de propósito: é a tela que menos se abre no dia a dia — só ao
   // instalar o Coredja em outro lugar, ou quando algo parou de funcionar.
-  { href: '/configuracoes', rotulo: 'Configurações', Icone: IconeConfiguracoes },
+  { href: '/configuracoes', rotulo: 'Configurações' },
 ];
 
 interface MenuLateralProps {
@@ -137,6 +127,15 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
         faz o item ativo se ler de relance no escuro, que é a condição real de
         uso no domingo.
 
+        SEM ÍCONE em cada item, também como na referência — os `<a>` dela são
+        texto puro. Uma primeira versão daqui trouxe um SVG por item, que não
+        veio de lugar nenhum: com sete rótulos curtos e claros, o ícone não
+        ajuda a achar mais rápido e ainda cria o problema de desenhar sete
+        símbolos igualmente legíveis a 20px (a engrenagem de Configurações
+        chegou a sair parecida com o sol do botão de tema). Medidas conferidas
+        contra a referência: gap 4px entre itens, 14px/16px de recheio, canto
+        de 12px.
+
         `overflow-y-auto` no `<nav>`: com a caixa "EQUIPE DE HOJE" no rodapé,
         num celular deitado o conteúdo pode passar da altura da janela — sem
         isso o rodapé fica inalcançável.
@@ -184,7 +183,6 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
                     className="flex cursor-not-allowed items-center gap-3.5 rounded-xl px-4 py-3.5 text-[15px] text-texto-fraco opacity-60"
                     title="Ainda não construída"
                   >
-                    <item.Icone className="shrink-0" />
                     {item.rotulo}
                     <span className="ml-auto text-[10px] tracking-wide text-texto-fraco uppercase">
                       em breve
@@ -214,7 +212,6 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
                       : undefined
                   }
                 >
-                  <item.Icone className="shrink-0" />
                   {item.rotulo}
                 </Link>
               </li>
