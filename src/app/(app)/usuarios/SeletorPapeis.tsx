@@ -3,39 +3,41 @@
 import type { Papel } from '@/lib/papeis';
 
 interface Props {
-  opcoes: { valor: Papel; rotulo: string }[];
-  selecionados: Papel[];
-  onMudar: (papeis: Papel[]) => void;
+  opcoes: { valor: Papel; rotulo: string; descricao?: string }[];
+  /** null quando o formulário ainda não tem um cargo escolhido (ex: convite novo). */
+  selecionado: Papel | null;
+  onMudar: (papel: Papel) => void;
 }
 
-/** Chips clicáveis para escolher um ou mais papéis. */
-export function SeletorPapeis({ opcoes, selecionados, onMudar }: Props) {
-  function alternar(papel: Papel) {
-    onMudar(
-      selecionados.includes(papel)
-        ? selecionados.filter((p) => p !== papel)
-        : [...selecionados, papel],
-    );
-  }
-
+/** Cartões em lista, um cargo por vez — hierarquia de cargo único, sem multi-seleção. */
+export function SeletorPapeis({ opcoes, selecionado, onMudar }: Props) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div role="radiogroup" className="flex flex-col gap-1.5">
       {opcoes.map((op) => {
-        const ativo = selecionados.includes(op.valor);
+        const ativo = op.valor === selecionado;
         return (
           <button
             key={op.valor}
             type="button"
-            onClick={() => alternar(op.valor)}
-            aria-pressed={ativo}
-            className="rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
+            role="radio"
+            aria-checked={ativo}
+            onClick={() => onMudar(op.valor)}
+            className="rounded-xl border px-3 py-2 text-left transition-colors"
             style={
               ativo
                 ? { background: 'var(--acento)', borderColor: 'var(--acento)', color: 'var(--acento-texto)' }
                 : { background: 'transparent', borderColor: 'var(--borda)', color: 'var(--texto-suave)' }
             }
           >
-            {op.rotulo}
+            <span className="text-sm font-medium">{op.rotulo}</span>
+            {op.descricao && (
+              <span
+                className="block text-xs"
+                style={{ color: ativo ? 'var(--acento-texto)' : 'var(--texto-fraco)', opacity: ativo ? 0.85 : 1 }}
+              >
+                {op.descricao}
+              </span>
+            )}
           </button>
         );
       })}

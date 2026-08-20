@@ -33,8 +33,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Áreas (nome e cor). Sem o token — ver comentário acima.
-    match /areas/{area} {
+    // Departamentos (nome e cor). Fonte da verdade real desde a
+    // generalização "qualquer departamento fala com qualquer outro" — ver
+    // src/lib/firebase-store.ts.
+    match /departamentos/{departamento} {
       allow read: if true;
       allow write: if false;
     }
@@ -51,7 +53,8 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Ordem do Culto (documento único, id "atual") — ver `src/lib/culto.ts`.
+    // Ordem do Culto (um documento por data, id "AAAA-MM-DD") — ver
+    // `src/lib/culto.ts`.
     // Mesma lógica de `mensagens`: leitura aberta porque é o navegador do
     // operador que escuta o Firestore direto para a tela avançar sozinha no
     // domingo, sem F5. Escrita só pelo servidor, que confere o papel de quem
@@ -86,6 +89,63 @@ service cloud.firestore {
     match /escala/{documento} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Mensagens prontas para colar no chat da transmissão ao vivo — ver
+    // `src/lib/live.ts`. Mesma lógica de `avisos`: leitura aberta porque é o
+    // navegador de quem opera a live que escuta o Firestore direto, para a
+    // biblioteca aparecer atualizada sem F5 no meio da transmissão; escrita
+    // só pelo servidor, que confere `live:escrever` (coordenador) antes de
+    // gravar — ver `src/app/api/live/`.
+    //
+    // Texto de boas-vindas e de oferta não é dado sensível: é exatamente o
+    // que já vai aparecer público no chat do YouTube segundos depois.
+    match /mensagens_live/{mensagem} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Configurações da instalação (endereço e TOKEN do Holyrics) — ver
+    // `src/lib/configuracoes.ts`.
+    //
+    // FECHADA DOS DOIS LADOS, e este é o único lugar do Coredja onde a
+    // negação de LEITURA importa de fato. Todas as coleções acima têm leitura
+    // aberta porque o navegador precisa escutá-las em tempo real e o conteúdo
+    // não é sensível. Aqui é o oposto: o documento guarda o token do Holyrics,
+    // e leitura aberta o entregaria a qualquer pessoa que soubesse o id do
+    // projeto — sem precisar de login nenhum.
+    //
+    // Nenhuma tela lê esta coleção direto: a de Configurações pergunta ao
+    // servidor, que confere o papel de admin e devolve o token MASCARADO
+    // (ver `mascarar`). O valor real nunca sai do servidor.
+    //
+    // O catch-all abaixo já negaria os dois por omissão. O bloco existe
+    // explícito porque "esta coleção é fechada de propósito, e por quê" é
+    // diferente de "esta coleção ainda não foi pensada" — e a diferença
+    // importa no dia em que alguém for abrir uma exceção aqui.
+    match /configuracoes/{documento} {
+      allow read, write: if false;
+    }
+
+    // Fila de comandos para o telão e sinal de vida da ponte — ver
+    // `src/lib/telao-fila.ts`.
+    //
+    // FECHADAS DOS DOIS LADOS, como `configuracoes` e diferente de
+    // `mensagens`/`avisos`/`culto`. Aqui não há motivo para o navegador
+    // participar: quem escreve é o servidor do Coredja (Admin SDK, que ignora
+    // estas regras) e quem lê é a ponte, que roda no PC do audiovisual com
+    // credencial própria de administrador — nunca uma página aberta.
+    //
+    // Deixar a leitura aberta "porque não é dado sensível" seria um erro
+    // diferente do óbvio: a fila não carrega segredo, mas carrega o que vai
+    // ao telão da igreja em tempo real, e escrita aberta deixaria qualquer
+    // pessoa projetar o que quisesse durante o culto.
+    match /telao_comandos/{comando} {
+      allow read, write: if false;
+    }
+
+    match /telao_estado/{documento} {
+      allow read, write: if false;
     }
 
     // Qualquer outra coleção fica fechada por padrão. Sem este bloco, uma

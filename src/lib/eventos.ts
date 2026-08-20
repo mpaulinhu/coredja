@@ -1,14 +1,14 @@
 /**
  * Avisos em tempo real entre quem grava e quem está com a tela aberta.
  *
- * Quando a Cantina envia um recado, o painel do audiovisual precisa mostrá-lo
- * sem que ninguém atualize a página. O caminho é: a rota de envio chama
- * `publicar()`, e todas as telas conectadas recebem o aviso e recarregam seus
- * dados.
+ * Quando um departamento envia um recado, o painel do outro lado precisa
+ * mostrá-lo sem que ninguém atualize a página. O caminho é: a rota de envio
+ * chama `publicar()`, e todas as telas conectadas recebem o aviso e
+ * recarregam seus dados.
  *
- * O aviso carrega apenas o tipo do evento e a área afetada, nunca o conteúdo
- * da mensagem. Assim o painel decide o que buscar, e uma tela de área nunca
- * recebe dados de outra por este canal.
+ * O aviso carrega apenas o tipo do evento e a conversa afetada, nunca o
+ * conteúdo da mensagem. Assim o painel decide o que buscar, e uma tela nunca
+ * recebe dados de outra conversa por este canal.
  *
  * Isto vale enquanto o servidor é um só — o PC do audiovisual, que é o caso
  * aqui. Com Firebase, este arquivo é substituído pelos listeners do Firestore.
@@ -21,7 +21,7 @@ export type TipoEvento =
 
 export interface Evento {
   tipo: TipoEvento;
-  areaSlug: string;
+  conversaId: string;
   /** Marca de tempo do evento, para depuração. */
   em: string;
 }
@@ -51,8 +51,8 @@ export function inscrever(ouvinte: Ouvinte): () => void {
 }
 
 /** Avisa todas as telas conectadas de que algo mudou. */
-export function publicar(tipo: TipoEvento, areaSlug: string): void {
-  const evento: Evento = { tipo, areaSlug, em: new Date().toISOString() };
+export function publicar(tipo: TipoEvento, conversaId: string): void {
+  const evento: Evento = { tipo, conversaId, em: new Date().toISOString() };
   for (const ouvinte of registro()) {
     // Uma tela que caiu no meio do envio não pode derrubar o aviso das outras.
     try {

@@ -76,12 +76,11 @@ echo.
 echo   NESTE PC (painel do audiovisual):
 echo      http://localhost:3000/painel
 echo.
-REM Os links das areas nao sao impressos aqui: eles contem o token secreto de
-REM cada uma, e este arquivo vai para um repositorio publico. A home mostra
-REM todos eles, ja montados.
+REM Cada pessoa entra com e-mail e senha. Os links secretos das areas foram
+REM removidos em agosto/2026 - ver "Contas e permissoes" no README.
 if defined IP (
-    echo   NOS CELULARES das areas ^(mesmo Wi-Fi^):
-    echo      Abra http://%IP%:3000 e use os links das areas.
+    echo   NOS CELULARES ^(mesmo Wi-Fi^):
+    echo      Abra http://%IP%:3000 e entre com e-mail e senha.
     echo.
 ) else (
     echo   [ATENCAO] Este PC nao esta conectado a uma rede local.

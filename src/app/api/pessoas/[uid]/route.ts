@@ -15,26 +15,28 @@ export async function PUT(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeFazer(pessoa.papeis, 'pessoas:escrever')) {
+  if (!podeFazer(pessoa.papel, 'pessoas:escrever')) {
     return Response.json({ erro: 'Seu papel não pode editar pessoas.' }, { status: 403 });
   }
 
-  let corpo: { papeis?: string[]; areasVisiveis?: string[] };
+  let corpo: { papel?: string; departamento?: string; areasVisiveis?: string[] };
   try {
     corpo = await request.json();
   } catch {
     return Response.json({ erro: 'Envio inválido.' }, { status: 400 });
   }
 
-  const papeis = (corpo.papeis ?? []).filter((p): p is Papel =>
-    PAPEIS_VALIDOS.includes(p as Papel),
-  );
-  if (papeis.length === 0) {
-    return Response.json({ erro: 'Escolha ao menos um papel.' }, { status: 400 });
+  const papel = PAPEIS_VALIDOS.includes(corpo.papel as Papel) ? (corpo.papel as Papel) : null;
+  if (!papel) {
+    return Response.json({ erro: 'Escolha um papel.' }, { status: 400 });
   }
 
   const { uid } = await params;
-  await pessoasStore.atualizar(uid, { papeis, areasVisiveis: corpo.areasVisiveis ?? [] });
+  await pessoasStore.atualizar(uid, {
+    papel,
+    departamento: corpo.departamento || undefined,
+    areasVisiveis: corpo.areasVisiveis ?? [],
+  });
   return Response.json({ ok: true });
 }
 
@@ -47,7 +49,7 @@ export async function DELETE(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeFazer(pessoa.papeis, 'pessoas:escrever')) {
+  if (!podeFazer(pessoa.papel, 'pessoas:escrever')) {
     return Response.json({ erro: 'Seu papel não pode remover pessoas.' }, { status: 403 });
   }
 

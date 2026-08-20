@@ -1,3 +1,4 @@
+import { conversaTemUrgencia } from '@/lib/conversas';
 import { publicar } from '@/lib/eventos';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 import { store } from '@/lib/store';
@@ -6,7 +7,8 @@ import { store } from '@/lib/store';
  * Resolver e reabrir um recado.
  *
  * Resolver tira o recado da lista ativa e o manda para o histórico; reabrir
- * desfaz, para o caso de um clique errado no meio do culto.
+ * desfaz, para o caso de um clique errado no meio do culto. Só faz sentido
+ * em conversas que envolvem o Audiovisual — as demais não têm esse aparato.
  */
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +36,31 @@ export async function PATCH(
     return Response.json({ erro: 'Ação inválida.' }, { status: 400 });
   }
 
+  const atual = await store.buscarMensagem(id);
+  if (!atual) {
+    return Response.json({ erro: 'Recado não encontrado.' }, { status: 404 });
+  }
+
+  const [deptoA, deptoB] = atual.conversaId.split('__');
+
+  // Só mexe no estado de uma conversa quem é uma das pontas dela.
+  const podeAgir =
+    pessoa.departamento === deptoA || pessoa.departamento === deptoB;
+
+  if (!podeAgir) {
+    return Response.json(
+      { erro: 'Esta conversa não é do seu departamento.' },
+      { status: 403 },
+    );
+  }
+
+  if (!conversaTemUrgencia(deptoA, deptoB)) {
+    return Response.json(
+      { erro: 'Esta conversa não usa resolver/reabrir.' },
+      { status: 400 },
+    );
+  }
+
   const mensagem =
     acao === 'resolver'
       ? await store.resolverMensagem(id)
@@ -43,21 +70,9 @@ export async function PATCH(
     return Response.json({ erro: 'Recado não encontrado.' }, { status: 404 });
   }
 
-  // O id não revela a área antes de buscar — por isso a checagem vem depois
-  // da operação, não antes. Sem acesso à área, desfaz e nega: o banco nunca
-  // fica com um estado que a checagem reprovaria.
-  if (!pessoa.areasVisiveis?.includes(mensagem.areaSlug)) {
-    if (acao === 'resolver') await store.reabrirMensagem(id);
-    else await store.resolverMensagem(id);
-    return Response.json(
-      { erro: 'Você não tem acesso a esta área.' },
-      { status: 403 },
-    );
-  }
-
   publicar(
     acao === 'resolver' ? 'mensagem-resolvida' : 'mensagem-reaberta',
-    mensagem.areaSlug,
+    mensagem.conversaId,
   );
 
   return Response.json({ mensagem });

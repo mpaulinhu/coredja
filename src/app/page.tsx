@@ -1,13 +1,21 @@
 import Link from 'next/link';
-import { LinkDaArea } from '@/components/LinkDaArea';
-import { AREAS, caminhoDaArea } from '@/lib/areas';
 import { ARMAZENAMENTO_ATIVO } from '@/lib/store';
 
 /**
  * Página inicial.
  *
- * Serve de índice: o painel do audiovisual e o link de cada área, para
- * abrir no celular e salvar na tela inicial.
+ * Porta de entrada: quem já tem conta entra, quem não tem descobre que
+ * precisa de uma.
+ *
+ * Até aqui esta página listava também o LINK SECRETO de cada área (Cantina,
+ * Kids) — um endereço com token que dava direito de mandar recado sem login
+ * nenhum. Isso fazia sentido enquanto o Coredja só existia dentro do Wi-Fi da
+ * igreja: para alcançar o link era preciso estar lá dentro.
+ *
+ * Publicado na internet, a mesma página entregaria a qualquer visitante o
+ * acesso de escrita de todas as áreas — e a home é a primeira coisa que
+ * qualquer pessoa abre. Os links saíram, e cada pessoa da Cantina e do Kids
+ * passa a ter conta com login, como todo mundo (ver `papeis.ts`).
  */
 export default function Home() {
   const naNuvem = ARMAZENAMENTO_ATIVO === 'firebase';
@@ -23,8 +31,8 @@ export default function Home() {
         className="mt-3 inline-flex items-center gap-2 rounded-full border border-borda bg-fundo-cartao px-3 py-1.5 text-xs"
         title={
           naNuvem
-            ? 'Os recados são salvos no Cloud Firestore. As imagens continuam no disco deste PC.'
-            : 'Os recados e as imagens são salvos em dados/, neste PC.'
+            ? 'Os recados são salvos no Cloud Firestore.'
+            : 'Os recados são salvos em dados/, neste PC.'
         }
       >
         <span
@@ -38,40 +46,17 @@ export default function Home() {
       </p>
 
       <section className="mt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-texto-fraco">
-          Audiovisual
-        </h2>
         <Link
           href="/painel"
-          className="mt-2 flex items-center justify-between rounded-xl border border-borda bg-fundo-cartao px-4 py-4 hover:bg-borda"
+          className="flex items-center justify-between rounded-xl border border-borda bg-fundo-cartao px-4 py-4 hover:bg-borda"
         >
-          <span className="font-semibold text-texto">Abrir painel</span>
+          <span className="font-semibold text-texto">Entrar no Coredja</span>
           <span className="text-texto-fraco">→</span>
         </Link>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-texto-fraco">
-          Áreas
-        </h2>
-        <p className="mt-1 text-sm text-texto-fraco">
-          Copie o link, abra no celular da área e mande salvar na tela inicial.
-        </p>
-
-        <ul className="mt-3 flex flex-col gap-2">
-          {AREAS.map((area) => (
-            <LinkDaArea
-              key={area.slug}
-              nome={area.nome}
-              cor={area.cor}
-              caminho={caminhoDaArea(area)}
-            />
-          ))}
-        </ul>
-
-        <p className="mt-3 text-xs text-texto-fraco">
-          Cada link é secreto: quem o tiver manda recado como se fosse a área.
-          Não publique em grupo.
+        <p className="mt-3 text-sm text-texto-fraco">
+          Cada pessoa entra com o próprio e-mail e senha. Quem ainda não tem
+          conta precisa pedir a quem administra o Coredja — é ele quem cria o
+          acesso e escolhe com quais setores você conversa.
         </p>
       </section>
     </div>

@@ -1,7 +1,13 @@
 import { nanoid } from 'nanoid';
-import { AREAS } from './areas';
+import { AUDIOVISUAL_SLUG } from './conversa-compartilhado';
 import { getDb } from './db';
-import type { Area, Mensagem, NovaMensagem, Store } from './types';
+import type {
+  ConversaComMensagem,
+  Departamento,
+  Mensagem,
+  NovaMensagem,
+  Store,
+} from './types';
 
 /**
  * Implementação de `Store` sobre SQLite local.
@@ -11,12 +17,22 @@ import type { Area, Mensagem, NovaMensagem, Store } from './types';
  * apontar `store.ts` para ele — nenhuma tela muda.
  */
 
+/** Departamentos semeados na primeira execução, se o banco estiver vazio. */
+const DEPARTAMENTOS_INICIAIS: Departamento[] = [
+  { slug: AUDIOVISUAL_SLUG, nome: 'Audiovisual', cor: '#6366f1' },
+  { slug: 'cantina', nome: 'Cantina', cor: '#e07a3f' },
+  { slug: 'kids', nome: 'Kids', cor: '#3f8fe0' },
+];
+
 interface LinhaMensagem {
   id: string;
-  area_slug: string;
-  autor: string;
+  conversa_id: string;
+  depto_a: string;
+  depto_b: string;
+  remetente: string;
+  autor: string | null;
   texto: string;
-  prioridade: string;
+  prioridade: string | null;
   criada_em: string;
   resolvida_em: string | null;
 }
@@ -31,32 +47,27 @@ interface LinhaAnexo {
 }
 
 /**
- * Grava no banco as áreas definidas em `areas.ts`.
- *
- * Roda a cada início. Nome, cor e token são sobrescritos pelo que está no
- * código, que é a fonte da verdade — assim trocar um token vazado é editar o
- * arquivo e reiniciar.
+ * Garante que os departamentos iniciais existam. Diferente do comportamento
+ * antigo de `areas.ts` (código como fonte da verdade, sobrescrito a cada
+ * início), `departamentos` agora é editável via CRUD — então isto só insere
+ * o que ainda não existe (`INSERT OR IGNORE`), nunca sobrescreve.
  */
-function semearAreas(): void {
+function semearDepartamentos(): void {
   const db = getDb();
-  const upsert = db.prepare(`
-    INSERT INTO areas (slug, nome, token, cor)
-    VALUES (@slug, @nome, @token, @cor)
-    ON CONFLICT(slug) DO UPDATE SET
-      nome  = excluded.nome,
-      token = excluded.token,
-      cor   = excluded.cor
+  const inserir = db.prepare(`
+    INSERT OR IGNORE INTO departamentos (slug, nome, cor)
+    VALUES (@slug, @nome, @cor)
   `);
-  const tx = db.transaction((areas: Area[]) => {
-    for (const area of areas) upsert.run(area);
+  const tx = db.transaction((departamentos: Departamento[]) => {
+    for (const departamento of departamentos) inserir.run(departamento);
   });
-  tx(AREAS);
+  tx(DEPARTAMENTOS_INICIAIS);
 }
 
 let semeado = false;
 function garantirSemeadura(): void {
   if (semeado) return;
-  semearAreas();
+  semearDepartamentos();
   semeado = true;
 }
 
@@ -81,8 +92,10 @@ function montarMensagens(linhas: LinhaMensagem[]): Mensagem[] {
 
   return linhas.map((linha) => ({
     id: linha.id,
-    areaSlug: linha.area_slug,
-    autor: linha.autor as Mensagem['autor'],
+    conversaId: linha.conversa_id,
+    remetente: linha.remetente,
+    // `?? undefined` porque o banco guarda NULL e o tipo usa opcional.
+    autor: linha.autor ?? undefined,
     texto: linha.texto,
     prioridade: linha.prioridade as Mensagem['prioridade'],
     criadaEm: linha.criada_em,
@@ -107,25 +120,50 @@ function buscarMensagem(id: string): Mensagem | null {
 }
 
 export const sqliteStore: Store = {
-  async listarAreas() {
+  async listarDepartamentos() {
     garantirSemeadura();
-    return getDb().prepare('SELECT * FROM areas ORDER BY nome').all() as Area[];
+    return getDb()
+      .prepare('SELECT * FROM departamentos ORDER BY nome')
+      .all() as Departamento[];
   },
 
-  async buscarArea(slug) {
+  async buscarDepartamento(slug) {
     garantirSemeadura();
-    const area = getDb()
-      .prepare('SELECT * FROM areas WHERE slug = ?')
-      .get(slug) as Area | undefined;
-    return area ?? null;
+    const departamento = getDb()
+      .prepare('SELECT * FROM departamentos WHERE slug = ?')
+      .get(slug) as Departamento | undefined;
+    return departamento ?? null;
   },
 
-  async autenticarArea(slug, token) {
+  async criarDepartamento(dados) {
     garantirSemeadura();
-    const area = getDb()
-      .prepare('SELECT * FROM areas WHERE slug = ? AND token = ?')
-      .get(slug, token) as Area | undefined;
-    return area ?? null;
+    getDb()
+      .prepare(
+        'INSERT INTO departamentos (slug, nome, cor) VALUES (@slug, @nome, @cor)',
+      )
+      .run(dados);
+    return dados;
+  },
+
+  async atualizarDepartamento(slug, dados) {
+    garantirSemeadura();
+    const db = getDb();
+    const existente = db
+      .prepare('SELECT * FROM departamentos WHERE slug = ?')
+      .get(slug) as Departamento | undefined;
+    if (!existente) return null;
+
+    db.prepare('UPDATE departamentos SET nome = ?, cor = ? WHERE slug = ?').run(
+      dados.nome,
+      dados.cor,
+      slug,
+    );
+    return { slug, ...dados };
+  },
+
+  async removerDepartamento(slug) {
+    garantirSemeadura();
+    getDb().prepare('DELETE FROM departamentos WHERE slug = ?').run(slug);
   },
 
   async criarMensagem(dados: NovaMensagem) {
@@ -134,10 +172,13 @@ export const sqliteStore: Store = {
     const id = nanoid();
     const criadaEm = new Date().toISOString();
 
+    const partes = dados.conversaId.split('__');
+    const [deptoA, deptoB] = [partes[0], partes[1] ?? partes[0]];
+
     const inserirMensagem = db.prepare(`
       INSERT INTO mensagens
-        (id, area_slug, autor, texto, prioridade, criada_em, resolvida_em)
-      VALUES (?, ?, ?, ?, ?, ?, NULL)
+        (id, conversa_id, depto_a, depto_b, remetente, autor, texto, prioridade, criada_em, resolvida_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
     `);
     const inserirAnexo = db.prepare(`
       INSERT INTO anexos
@@ -150,8 +191,11 @@ export const sqliteStore: Store = {
     const tx = db.transaction(() => {
       inserirMensagem.run(
         id,
-        dados.areaSlug,
-        dados.autor,
+        dados.conversaId,
+        deptoA,
+        deptoB,
+        dados.remetente,
+        dados.autor ?? null,
         dados.texto,
         dados.prioridade,
         criadaEm,
@@ -199,19 +243,37 @@ export const sqliteStore: Store = {
     return montarMensagens(linhas);
   },
 
-  async listarPorArea(areaSlug, limite = 50) {
+  async listarPorConversa(conversaId, limite = 50) {
     garantirSemeadura();
     // Busca em ordem decrescente para pegar as mais recentes, depois inverte:
-    // a área lê a conversa de cima para baixo, como num aplicativo de mensagem.
+    // a conversa é lida de cima para baixo, como num aplicativo de mensagem.
     const linhas = getDb()
       .prepare(
         `SELECT * FROM mensagens
-         WHERE area_slug = ?
+         WHERE conversa_id = ?
          ORDER BY criada_em DESC
          LIMIT ?`,
       )
-      .all(areaSlug, limite) as LinhaMensagem[];
+      .all(conversaId, limite) as LinhaMensagem[];
     return montarMensagens(linhas).reverse();
+  },
+
+  async listarConversasComMensagem() {
+    garantirSemeadura();
+    // depto_a/depto_b já vêm gravados por linha (ver criarMensagem e a
+    // migração em db.ts), então um DISTINCT simples resolve sem precisar
+    // reprocessar idDaConversa aqui.
+    return getDb()
+      .prepare(
+        `SELECT DISTINCT conversa_id AS conversaId, depto_a AS deptoA, depto_b AS deptoB
+         FROM mensagens`,
+      )
+      .all() as ConversaComMensagem[];
+  },
+
+  async buscarMensagem(id) {
+    garantirSemeadura();
+    return buscarMensagem(id);
   },
 
   async resolverMensagem(id) {

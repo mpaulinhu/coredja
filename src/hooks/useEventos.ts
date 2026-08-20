@@ -22,12 +22,13 @@ import { firebaseConfigurado, getFirestoreCliente } from '@/lib/firebase-cliente
  * com vários servidores, quem enviou o recado avisa apenas as telas ligadas
  * naquele processo, e as demais nunca ficam sabendo.
  *
- * `areaSlug` limita a escuta a uma área — a tela da Cantina não precisa
- * acordar quando o Kids manda recado.
+ * `conversaId` limita a escuta a uma conversa — a tela da Cantina não
+ * precisa acordar quando o Kids manda recado numa conversa que não a
+ * envolve.
  */
 export function useEventos(
   aoReceber: (evento: Evento) => void,
-  areaSlug?: string,
+  conversaId?: string,
 ): void {
   // A função de callback costuma ser recriada a cada render; guardá-la numa ref
   // evita refazer a inscrição a cada atualização da tela.
@@ -42,8 +43,8 @@ export function useEventos(
 
     // --- Caminho 1: escuta o Firestore direto -----------------------------
     if (db) {
-      const alvo = areaSlug
-        ? query(collection(db, 'mensagens'), where('areaSlug', '==', areaSlug))
+      const alvo = conversaId
+        ? query(collection(db, 'mensagens'), where('conversaId', '==', conversaId))
         : collection(db, 'mensagens');
 
       let primeira = true;
@@ -63,7 +64,7 @@ export function useEventos(
           // qualquer forma, então detalhar cada documento não ajudaria.
           callback.current({
             tipo: 'mensagem-nova',
-            areaSlug: areaSlug ?? '',
+            conversaId: conversaId ?? '',
             em: new Date().toISOString(),
           });
         },
@@ -80,7 +81,7 @@ export function useEventos(
     fonte.onmessage = (evento) => {
       try {
         const dados = JSON.parse(evento.data) as Evento;
-        if (areaSlug && dados.areaSlug !== areaSlug) return;
+        if (conversaId && dados.conversaId !== conversaId) return;
         callback.current(dados);
       } catch {
         // Linha malformada: ignorar é melhor que derrubar a tela.
@@ -88,7 +89,7 @@ export function useEventos(
     };
 
     return () => fonte.close();
-  }, [areaSlug]);
+  }, [conversaId]);
 }
 
 /** Qual mecanismo está em uso. Exposto para a home mostrar o estado. */

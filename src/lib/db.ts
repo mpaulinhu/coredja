@@ -13,20 +13,32 @@ import path from 'node:path';
 const RAIZ_DADOS = path.join(process.cwd(), 'dados');
 const ARQUIVO_DB = path.join(RAIZ_DADOS, 'coredja.db');
 
+/** Slug reservado do departamento de audiovisual — espelha `conversas.ts`
+ *  (este arquivo não importa dali para não criar dependência circular com
+ *  `sqlite-store.ts`, que já importa `db.ts`). */
+const AUDIOVISUAL_SLUG = 'audiovisual';
+
+/** Mesmo algoritmo de `idDaConversa` em `conversas.ts` — ver nota acima. */
+function idDaConversa(a: string, b: string): string {
+  return [a, b].sort().join('__');
+}
+
 const SCHEMA = `
-CREATE TABLE IF NOT EXISTS areas (
+CREATE TABLE IF NOT EXISTS departamentos (
   slug  TEXT PRIMARY KEY,
   nome  TEXT NOT NULL,
-  token TEXT NOT NULL,
   cor   TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS mensagens (
   id           TEXT PRIMARY KEY,
-  area_slug    TEXT NOT NULL REFERENCES areas(slug),
-  autor        TEXT NOT NULL CHECK (autor IN ('area', 'audiovisual')),
+  conversa_id  TEXT NOT NULL,
+  depto_a      TEXT NOT NULL,
+  depto_b      TEXT NOT NULL,
+  remetente    TEXT NOT NULL,
+  autor        TEXT,
   texto        TEXT NOT NULL,
-  prioridade   TEXT NOT NULL CHECK (prioridade IN ('normal', 'urgente')),
+  prioridade   TEXT CHECK (prioridade IN ('normal', 'urgente')),
   criada_em    TEXT NOT NULL,
   resolvida_em TEXT
 );
@@ -45,12 +57,139 @@ CREATE TABLE IF NOT EXISTS anexos (
 CREATE INDEX IF NOT EXISTS idx_mensagens_pendentes
   ON mensagens (resolvida_em, criada_em DESC);
 
-CREATE INDEX IF NOT EXISTS idx_mensagens_area
-  ON mensagens (area_slug, criada_em DESC);
+CREATE INDEX IF NOT EXISTS idx_mensagens_conversa
+  ON mensagens (conversa_id, criada_em DESC);
 
 CREATE INDEX IF NOT EXISTS idx_anexos_mensagem
   ON anexos (mensagem_id);
 `;
+
+/**
+ * Migra o schema antigo (`areas` + `mensagens.area_slug`/`autor`) para o novo
+ * (`departamentos` + `mensagens.conversa_id`/`remetente`/`depto_a`/`depto_b`).
+ *
+ * Roda como bloco condicional — só age se a coluna antiga (`area_slug`) ainda
+ * existir — para ser idempotente em quem já migrou. `depto_a`/`depto_b` são
+ * gravados na própria linha (em vez de derivados de `idDaConversa` a cada
+ * leitura) porque é a forma mais simples de implementar corretamente
+ * `listarConversasComMensagem` sem reprocessar o id toda vez.
+ */
+function migrarSchemaAntigo(db: Database.Database): void {
+  const temColunaAntiga = (
+    db.prepare(`PRAGMA table_info(mensagens)`).all() as { name: string }[]
+  ).some((coluna) => coluna.name === 'area_slug');
+
+  if (!temColunaAntiga) return;
+
+  const migrar = db.transaction(() => {
+    // 1. departamentos: renomeia a tabela e dropa a coluna token.
+    db.exec(`ALTER TABLE areas RENAME TO departamentos_antigo`);
+    db.exec(`
+      CREATE TABLE departamentos (
+        slug TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        cor  TEXT NOT NULL
+      )
+    `);
+    db.exec(`
+      INSERT INTO departamentos (slug, nome, cor)
+      SELECT slug, nome, cor FROM departamentos_antigo
+    `);
+    db.exec(`DROP TABLE departamentos_antigo`);
+
+    // Garante o audiovisual, que antes não era uma "área" cadastrada.
+    db.prepare(
+      `INSERT OR IGNORE INTO departamentos (slug, nome, cor) VALUES (?, ?, ?)`,
+    ).run(AUDIOVISUAL_SLUG, 'Audiovisual', '#6366f1');
+
+    // 2. mensagens: cria a tabela nova e migra linha a linha em JS — mais
+    // simples e seguro que replicar idDaConversa em SQL puro.
+    db.exec(`ALTER TABLE mensagens RENAME TO mensagens_antigo`);
+    db.exec(`
+      CREATE TABLE mensagens (
+        id           TEXT PRIMARY KEY,
+        conversa_id  TEXT NOT NULL,
+        depto_a      TEXT NOT NULL,
+        depto_b      TEXT NOT NULL,
+        remetente    TEXT NOT NULL,
+        texto        TEXT NOT NULL,
+        prioridade   TEXT CHECK (prioridade IN ('normal', 'urgente')),
+        criada_em    TEXT NOT NULL,
+        resolvida_em TEXT
+      )
+    `);
+
+    interface LinhaAntiga {
+      id: string;
+      area_slug: string;
+      autor: string;
+      texto: string;
+      prioridade: string;
+      criada_em: string;
+      resolvida_em: string | null;
+    }
+    const antigas = db
+      .prepare(`SELECT * FROM mensagens_antigo`)
+      .all() as LinhaAntiga[];
+
+    const inserir = db.prepare(`
+      INSERT INTO mensagens
+        (id, conversa_id, depto_a, depto_b, remetente, texto, prioridade, criada_em, resolvida_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const linha of antigas) {
+      const [a, b] = [linha.area_slug, AUDIOVISUAL_SLUG].sort();
+      const remetente = linha.autor === 'area' ? linha.area_slug : AUDIOVISUAL_SLUG;
+      inserir.run(
+        linha.id,
+        idDaConversa(linha.area_slug, AUDIOVISUAL_SLUG),
+        a,
+        b,
+        remetente,
+        linha.texto,
+        linha.prioridade,
+        linha.criada_em,
+        linha.resolvida_em,
+      );
+    }
+
+    db.exec(`DROP TABLE mensagens_antigo`);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_mensagens_pendentes
+        ON mensagens (resolvida_em, criada_em DESC)
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_mensagens_conversa
+        ON mensagens (conversa_id, criada_em DESC)
+    `);
+  });
+
+  migrar();
+}
+
+/**
+ * Acrescenta `mensagens.autor` (nome de quem escreveu, para o painel exibir
+ * "Departamento · Pessoa") em bancos criados antes do campo existir.
+ *
+ * `CREATE TABLE IF NOT EXISTS` não altera tabela já existente, então o
+ * `SCHEMA` acima só cobre instalação nova — daí este ALTER condicional. A
+ * coluna é anulável de propósito: recado antigo não tem como saber quem
+ * escreveu, e fica só com o departamento (ver `Mensagem.autor`).
+ */
+function migrarColunaAutor(db: Database.Database): void {
+  const temTabela = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mensagens'`)
+    .get();
+  if (!temTabela) return; // instalação nova: o SCHEMA já cria com a coluna
+
+  const temColuna = (
+    db.prepare(`PRAGMA table_info(mensagens)`).all() as { name: string }[]
+  ).some((coluna) => coluna.name === 'autor');
+  if (temColuna) return;
+
+  db.exec(`ALTER TABLE mensagens ADD COLUMN autor TEXT`);
+}
 
 let instancia: Database.Database | null = null;
 
@@ -80,6 +219,12 @@ export function getDb(): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
+  // A migração precisa rodar ANTES do schema novo criar `departamentos`/
+  // `mensagens`: `CREATE TABLE IF NOT EXISTS` não recria uma tabela já
+  // existente, então se o schema rodasse primeiro numa instalação antiga a
+  // migração acharia a tabela nova vazia em vez da antiga com dados.
+  migrarSchemaAntigo(db);
+  migrarColunaAutor(db);
   db.exec(SCHEMA);
 
   instancia = db;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { CabecalhoDaTela } from '@/components/CabecalhoDaTela';
 import { FUNCOES, type Escala, type Escalado, type Funcao } from '@/lib/escala';
 
 interface Props {
@@ -77,13 +78,13 @@ export function EditorEscala({ escala, onSalvar, onMarcarPresenca }: Props) {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-xl flex-col px-5 py-8">
-      <h1 className="text-2xl font-bold tracking-tight text-texto">Escala do Time</h1>
-      <p className="mt-1 text-sm text-texto-suave">
-        Escolha quem faz cada função. A pessoa confirma presença no dia.
-      </p>
+    <div className="flex h-full w-full flex-col px-5 py-8 sm:px-8">
+      <CabecalhoDaTela
+        titulo="Escala do Time"
+        instrucao="A pessoa confirma presença no dia."
+      />
 
-      <label htmlFor="data" className="mt-6 mb-1.5 block text-sm text-texto-suave">
+      <label htmlFor="data" className="mt-4 mb-1.5 block text-sm text-texto-suave">
         Data
       </label>
       <input
@@ -94,10 +95,10 @@ export function EditorEscala({ escala, onSalvar, onMarcarPresenca }: Props) {
           setData(e.target.value);
           setSalvo(false);
         }}
-        className="w-full rounded-xl border border-borda bg-fundo-cartao px-3 py-2.5 text-[16px] text-texto"
+        className="w-full max-w-xs rounded-xl border border-borda bg-fundo-cartao px-3 py-2.5 text-[16px] text-texto"
       />
 
-      <div className="mt-6 flex flex-col gap-2">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {FUNCOES.map((funcao) => {
           const linhas = escalados.filter((e) => e.funcao === funcao);
           return (
@@ -147,14 +148,14 @@ export function EditorEscala({ escala, onSalvar, onMarcarPresenca }: Props) {
         type="button"
         onClick={salvar}
         disabled={salvando}
-        className="mt-6 h-14 w-full rounded-xl text-base font-bold disabled:opacity-60"
+        className="mt-4 h-14 w-full max-w-sm rounded-xl text-base font-bold disabled:opacity-60"
         style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
       >
         {salvando ? 'Salvando…' : salvo ? 'Salvo ✓' : 'Publicar escala'}
       </button>
 
       {escala && escala.escalados.length > 0 && (
-        <div className="mt-8 border-t border-borda pt-5">
+        <div className="mt-6 border-t border-borda pt-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-texto-fraco">
             Presença confirmada
           </p>

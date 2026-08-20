@@ -1,7 +1,13 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import { AREAS } from './areas';
+import { AUDIOVISUAL_SLUG } from './conversa-compartilhado';
 import { getFirestoreDb } from './firebase';
-import type { Mensagem, NovaMensagem, Store } from './types';
+import type {
+  ConversaComMensagem,
+  Departamento,
+  Mensagem,
+  NovaMensagem,
+  Store,
+} from './types';
 
 /**
  * Implementação de `Store` sobre o Cloud Firestore.
@@ -9,31 +15,42 @@ import type { Mensagem, NovaMensagem, Store } from './types';
  * Espelha `sqlite-store.ts` operação por operação. A escolha entre os dois
  * acontece em `store.ts`, e nenhuma tela sabe qual está em uso.
  *
- * Três diferenças de modelagem em relação ao SQLite valem nota:
+ * Duas diferenças de modelagem em relação ao SQLite valem nota:
  *
  * 1. Os anexos ficam dentro do próprio documento da mensagem, não numa
  *    coleção separada. No Firestore cada leitura de documento é cobrada, e
  *    guardar junto evita uma segunda consulta por mensagem. São no máximo 4
  *    anexos pequenos, bem abaixo do limite de 1 MB por documento.
  *
- * 2. Não há JOIN. Onde o SQL cruzava tabelas, aqui a leitura é direta — o que
- *    na prática deixa o código mais simples, não mais complexo.
- *
- * 3. Toda ordenação acontece em memória, nunca no banco. O Firestore exige um
+ * 2. Toda ordenação acontece em memória, nunca no banco. O Firestore exige um
  *    índice composto, criado à mão no Console, para qualquer consulta que
  *    filtre por um campo e ordene por outro — e cada consulta dessas seria
  *    mais um passo manual para quem instalar isso numa igreja. Com dezenas ou
  *    centenas de recados, ordenar em memória é instantâneo e não custa nada.
  *    Se um dia o volume crescer muito, aí sim vale criar os índices.
+ *
+ * Diferente do modelo antigo (onde `AREAS` de `areas.ts` era a fonte da
+ * verdade, e a coleção `areas` só um espelho para o navegador ler), a
+ * coleção `departamentos` agora É a fonte da verdade — o CRUD de
+ * Departamentos (Etapa 4, fora do escopo desta migração) escreve direto nela.
  */
 
-const COLECAO_AREAS = 'areas';
+const COLECAO_DEPARTAMENTOS = 'departamentos';
 const COLECAO_MENSAGENS = 'mensagens';
+
+/** Departamentos semeados na primeira execução, se a coleção estiver vazia. */
+const DEPARTAMENTOS_INICIAIS: Departamento[] = [
+  { slug: AUDIOVISUAL_SLUG, nome: 'Audiovisual', cor: '#6366f1' },
+  { slug: 'cantina', nome: 'Cantina', cor: '#e07a3f' },
+  { slug: 'kids', nome: 'Kids', cor: '#3f8fe0' },
+];
 
 /** Formato do documento de mensagem no Firestore. */
 interface DocMensagem {
-  areaSlug: string;
-  autor: Mensagem['autor'];
+  conversaId: string;
+  remetente: string;
+  /** Ausente em recado gravado antes do campo existir — ver `Mensagem.autor`. */
+  autor?: string;
   texto: string;
   prioridade: Mensagem['prioridade'];
   criadaEm: string;
@@ -46,16 +63,8 @@ function db(): Firestore {
 }
 
 /**
- * Grava no Firestore as áreas definidas em `areas.ts`.
- *
- * Como no SQLite, o código é a fonte da verdade: trocar um token vazado é
- * editar o arquivo e reiniciar. Roda uma vez por processo.
- *
- * O `token` NÃO é gravado. Ele é o segredo do link de cada área, e as regras
- * do Firestore liberam leitura das áreas para o navegador (é o que permite o
- * tempo real). Guardá-lo aqui exporia o link de todas as áreas a qualquer um
- * que abrisse o banco. A conferência do token acontece no servidor, contra
- * `areas.ts`.
+ * Garante que os departamentos iniciais existam, sem sobrescrever o que já
+ * foi editado pelo CRUD (Etapa 4). Roda uma vez por processo.
  */
 let semeadura: Promise<void> | null = null;
 
@@ -64,15 +73,14 @@ async function garantirSemeadura(): Promise<void> {
   // na primeira vez, ambas esperam a mesma escrita em vez de disparar duas.
   if (!semeadura) {
     semeadura = (async () => {
+      const colecao = db().collection(COLECAO_DEPARTAMENTOS);
       const lote = db().batch();
-      for (const area of AREAS) {
-        // Só nome e cor: o token é segredo e não pode ir para um banco cuja
-        // leitura o navegador alcança.
-        lote.set(db().collection(COLECAO_AREAS).doc(area.slug), {
-          slug: area.slug,
-          nome: area.nome,
-          cor: area.cor,
-        });
+      for (const departamento of DEPARTAMENTOS_INICIAIS) {
+        const ref = colecao.doc(departamento.slug);
+        const existente = await ref.get();
+        if (!existente.exists) {
+          lote.set(ref, { nome: departamento.nome, cor: departamento.cor });
+        }
       }
       await lote.commit();
     })().catch((erro) => {
@@ -85,6 +93,13 @@ async function garantirSemeadura(): Promise<void> {
   return semeadura;
 }
 
+function paraDepartamento(
+  slug: string,
+  dados: FirebaseFirestore.DocumentData,
+): Departamento {
+  return { slug, nome: dados.nome, cor: dados.cor };
+}
+
 /** Converte um documento do Firestore para o formato usado nas telas. */
 function paraMensagem(
   id: string,
@@ -93,10 +108,11 @@ function paraMensagem(
   const doc = dados as DocMensagem;
   return {
     id,
-    areaSlug: doc.areaSlug,
+    conversaId: doc.conversaId,
+    remetente: doc.remetente,
     autor: doc.autor,
     texto: doc.texto,
-    prioridade: doc.prioridade,
+    prioridade: doc.prioridade ?? null,
     criadaEm: doc.criadaEm,
     resolvidaEm: doc.resolvidaEm ?? null,
     anexos: doc.anexos ?? [],
@@ -104,24 +120,42 @@ function paraMensagem(
 }
 
 export const firebaseStore: Store = {
-  async listarAreas() {
+  async listarDepartamentos() {
     await garantirSemeadura();
-    // As áreas vêm de areas.ts, não do banco: o token não é gravado lá, e o
-    // código é a fonte da verdade de qualquer forma. O que está no Firestore
-    // existe para o navegador poder exibir nome e cor no tempo real.
-    return [...AREAS].sort((a, b) => a.nome.localeCompare(b.nome));
+    const snap = await db().collection(COLECAO_DEPARTAMENTOS).get();
+    return snap.docs
+      .map((d) => paraDepartamento(d.id, d.data()))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
   },
 
-  async buscarArea(slug) {
+  async buscarDepartamento(slug) {
     await garantirSemeadura();
-    return AREAS.find((a) => a.slug === slug) ?? null;
+    const doc = await db().collection(COLECAO_DEPARTAMENTOS).doc(slug).get();
+    return doc.exists ? paraDepartamento(doc.id, doc.data()!) : null;
   },
 
-  async autenticarArea(slug, token) {
-    const area = await this.buscarArea(slug);
-    // Confere o token no servidor, contra areas.ts. Ele nunca chega ao
-    // Firestore, então nem quem lê o banco descobre o link de uma área.
-    return area && area.token === token ? area : null;
+  async criarDepartamento(dados) {
+    await garantirSemeadura();
+    await db()
+      .collection(COLECAO_DEPARTAMENTOS)
+      .doc(dados.slug)
+      .set({ nome: dados.nome, cor: dados.cor });
+    return dados;
+  },
+
+  async atualizarDepartamento(slug, dados) {
+    await garantirSemeadura();
+    const ref = db().collection(COLECAO_DEPARTAMENTOS).doc(slug);
+    const existente = await ref.get();
+    if (!existente.exists) return null;
+
+    await ref.update({ nome: dados.nome, cor: dados.cor });
+    return { slug, ...dados };
+  },
+
+  async removerDepartamento(slug) {
+    await garantirSemeadura();
+    await db().collection(COLECAO_DEPARTAMENTOS).doc(slug).delete();
   },
 
   async criarMensagem(dados: NovaMensagem) {
@@ -129,8 +163,10 @@ export const firebaseStore: Store = {
 
     const criadaEm = new Date().toISOString();
     const doc: DocMensagem = {
-      areaSlug: dados.areaSlug,
-      autor: dados.autor,
+      conversaId: dados.conversaId,
+      remetente: dados.remetente,
+      // Só entra no documento quando existe: o Firestore recusa `undefined`.
+      ...(dados.autor ? { autor: dados.autor } : {}),
       texto: dados.texto,
       prioridade: dados.prioridade,
       criadaEm,
@@ -183,21 +219,47 @@ export const firebaseStore: Store = {
       .slice(0, limite);
   },
 
-  async listarPorArea(areaSlug, limite = 50) {
+  async listarPorConversa(conversaId, limite = 50) {
     await garantirSemeadura();
     const snap = await db()
       .collection(COLECAO_MENSAGENS)
-      .where('areaSlug', '==', areaSlug)
+      .where('conversaId', '==', conversaId)
       .get();
 
     // Ordena da mais recente para a mais antiga, corta no limite, e então
-    // inverte: a área lê a conversa de cima para baixo, como num aplicativo
-    // de mensagem.
+    // inverte: a conversa é lida de cima para baixo, como num aplicativo de
+    // mensagem.
     return snap.docs
       .map((d) => paraMensagem(d.id, d.data()))
       .sort((a, b) => b.criadaEm.localeCompare(a.criadaEm))
       .slice(0, limite)
       .reverse();
+  },
+
+  async listarConversasComMensagem() {
+    await garantirSemeadura();
+    // Agrupa em memória por conversaId — mesmo padrão já usado neste arquivo
+    // para evitar índice composto. deptoA/deptoB vêm de dar split no id
+    // (construído por idDaConversa como "a__b", já ordenado).
+    const snap = await db().collection(COLECAO_MENSAGENS).get();
+
+    const porConversa = new Map<string, ConversaComMensagem>();
+    for (const doc of snap.docs) {
+      const conversaId = (doc.data() as DocMensagem).conversaId;
+      if (porConversa.has(conversaId)) continue;
+
+      const [deptoA, deptoB] = conversaId.split('__');
+      porConversa.set(conversaId, { conversaId, deptoA, deptoB: deptoB ?? deptoA });
+    }
+
+    return [...porConversa.values()];
+  },
+
+  async buscarMensagem(id) {
+    await garantirSemeadura();
+    const doc = await db().collection(COLECAO_MENSAGENS).doc(id).get();
+    if (!doc.exists) return null;
+    return paraMensagem(doc.id, doc.data()!);
   },
 
   async resolverMensagem(id) {

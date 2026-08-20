@@ -7,7 +7,10 @@ import type { Papel, Pessoa } from './papeis';
 interface DocPessoa {
   nome: string;
   email: string;
-  papeis: Papel[];
+  papel?: Papel;
+  /** @deprecated campo antigo, multi-papel — ver fallback em `pessoaDaRequisicao`. */
+  papeis?: Papel[];
+  departamento?: string;
   areasVisiveis?: string[];
 }
 
@@ -64,7 +67,10 @@ export async function pessoaDaRequisicao(request: Request): Promise<Pessoa | nul
     uid,
     nome: dados.nome,
     email: dados.email,
-    papeis: dados.papeis ?? [],
+    // Fallback pra ficha antiga (`papeis: Papel[]`), de antes da migração
+    // pra cargo único — pega o primeiro papel da lista como aproximação.
+    papel: dados.papel ?? dados.papeis?.[0] ?? 'operador',
+    departamento: dados.departamento,
     areasVisiveis: dados.areasVisiveis ?? [],
   };
 }

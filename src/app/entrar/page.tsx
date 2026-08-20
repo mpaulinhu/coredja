@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { entrar } from '@/lib/auth-cliente';
+import { IconeOlho, IconeOlhoFechado } from '@/components/IconesFormulario';
 
 /**
  * Tela de login das pessoas da igreja (líder, coordenador, operador).
@@ -14,6 +15,7 @@ export default function PaginaEntrar() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [senhaVisivel, setSenhaVisivel] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -62,15 +64,26 @@ export default function PaginaEntrar() {
             <label htmlFor="senha" className="mb-1.5 block text-sm text-texto-suave">
               Senha
             </label>
-            <input
-              id="senha"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              className="w-full rounded-xl border border-borda bg-fundo-cartao px-3 py-3 text-[16px] text-texto placeholder:text-texto-fraco"
-            />
+            <div className="relative">
+              <input
+                id="senha"
+                type={senhaVisivel ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                className="w-full rounded-xl border border-borda bg-fundo-cartao px-3 py-3 pr-11 text-[16px] text-texto placeholder:text-texto-fraco"
+              />
+              <button
+                type="button"
+                onClick={() => setSenhaVisivel((v) => !v)}
+                aria-label={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
+                aria-pressed={senhaVisivel}
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-texto-fraco hover:text-texto-suave"
+              >
+                {senhaVisivel ? <IconeOlhoFechado /> : <IconeOlho />}
+              </button>
+            </div>
           </div>
 
           {erro && (

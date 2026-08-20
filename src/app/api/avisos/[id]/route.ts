@@ -13,7 +13,7 @@ export async function DELETE(
   if (!pessoa) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
-  if (!podeFazer(pessoa.papeis, 'avisos:escrever')) {
+  if (!podeFazer(pessoa.papel, 'avisos:escrever')) {
     return Response.json(
       { erro: 'Seu papel não pode remover avisos.' },
       { status: 403 },

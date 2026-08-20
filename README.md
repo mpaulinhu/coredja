@@ -43,19 +43,17 @@ Abra a **home** (`localhost:3000`) — ela lista tudo:
 
 | Quem | Onde |
 |---|---|
-| Audiovisual (você) | Botão **Abrir painel** |
-| Cantina e Kids | Na seção **Áreas**, com botão de copiar o link |
+| Qualquer pessoa com conta | Botão **Entrar no Coredja** |
 
-Os links das áreas têm um trecho secreto (`/a/cantina-XXXXX`) que não aparece
-neste README de propósito: **quem tem o link manda recado como se fosse a
-área**. Eles são montados a partir dos tokens do `.env.local`.
+Todo mundo entra com e-mail e senha. Quem cria as contas é quem tem papel
+**Admin**, na tela **Usuários** — é lá que se escolhe o departamento da pessoa
+e com quais setores ela pode conversar.
 
 ### Nos celulares das áreas
 
 Os celulares não conseguem abrir `localhost` — esse endereço significa "este
 computador aqui". Por isso o `.bat` mostra o número do PC na rede, algo como
-`192.168.50.104`. Abra esse endereço no celular e a home aparece com os links
-prontos, já com o endereço completo.
+`192.168.50.104`. Abra esse endereço no celular e entre com e-mail e senha.
 
 Depois é só **salvar na tela inicial**. Vira um ícone, e a pessoa não precisa
 digitar nada de novo.
@@ -119,46 +117,39 @@ Vale desativar a suspensão automática do Windows durante o culto.
 
 ---
 
-## Os links secretos
+## Contas e permissões
 
-Não há login: quem tem o link de uma área envia recados como aquela área.
-É simples de usar e não atrapalha ninguém no meio do culto, mas significa
-que um link vazado num grupo de WhatsApp deixa qualquer pessoa mandar recado
-como se fosse a Cantina.
+Não há mais link secreto: cada pessoa tem conta própria, com e-mail e senha
+(Firebase Authentication). Criar uma conta de login **não dá acesso a nada
+sozinho** — quem dá acesso é o documento que o Admin cria em **Usuários**,
+apontando para aquela pessoa.
 
-Os tokens ficam em variáveis de ambiente, **nunca no código** — este
-repositório é público, e no código qualquer um os leria:
+Cada pessoa tem:
 
-```bash
-# .env.local (no PC) ou painel da hospedagem
-COREDJA_TOKEN_CANTINA=algumacoisasecreta
-COREDJA_TOKEN_KIDS=outracoisasecreta
-```
+- **Um cargo**, do mais amplo para o menos: Admin › Líder › Coordenador ›
+  Operador. O cargo já inclui tudo que os de baixo fazem — não se marca vários.
+- **Um departamento**: de qual setor ela fala quando escreve no Painel.
+- **Com quem pode conversar**: os departamentos com quem o Admin liberou abrir
+  conversa. Vazio significa "ainda não fala com ninguém", e não "fala com
+  todos" — é mais seguro que uma pessoa nova comece sem alcance.
 
-Para invalidar um link que vazou, troque o valor e reinicie. O link antigo
-para de funcionar na hora e o histórico continua intacto.
+Para tirar o acesso de alguém, apague a pessoa em **Usuários**. Diferente do
+link secreto (que valia para quem o tivesse), isso vale na hora e só para
+aquela pessoa — ninguém mais precisa trocar nada.
 
-Sem essas variáveis, a plataforma roda localmente com tokens previsíveis
-(`dev-cantina`), só para você conseguir testar — e **se recusa a subir
-publicada**, para não deixar as áreas abertas por esquecimento.
+> **Histórico.** Até agosto de 2026, Cantina e Kids entravam por um link com
+> token (`/a/cantina-SEGREDO`), sem login. Funcionava porque o Coredja só
+> existia dentro do Wi-Fi da igreja. Ao publicar na internet, esse mesmo link
+> daria acesso de escrita a qualquer pessoa do mundo que o tivesse — por isso
+> foi removido, junto com as variáveis `COREDJA_TOKEN_*`.
 
 ---
 
-## Adicionar uma área nova
+## Adicionar um setor novo
 
-Abra [`src/lib/areas.ts`](src/lib/areas.ts) e acrescente um item à lista:
-
-```ts
-{
-  slug: 'recepcao',
-  nome: 'Recepção',
-  cor: '#7c5cd6',                          // cor no painel
-  variavelDoToken: 'COREDJA_TOKEN_RECEPCAO',
-}
-```
-
-Defina `COREDJA_TOKEN_RECEPCAO` no `.env.local` (e no painel da hospedagem, se
-estiver publicada) e reinicie. A área nova aparece na home e no painel.
+Pela tela **Departamentos**, no menu (só Admin). Nome e cor, e ele já aparece
+como opção de conversa para todo mundo. Não precisa mexer em código nem
+reiniciar nada.
 
 ---
 
@@ -241,9 +232,10 @@ para receber os recados em tempo real. A escrita fica fechada para todos —
 todo envio passa pelo servidor, que usa a chave de administrador e ignora as
 regras. Ninguém cria, altera ou apaga recado direto no banco.
 
-O `token` de cada área **não é gravado no Firestore**. Ele é o segredo do link
-de envio, e um banco de leitura aberta o exporia. Fica só em
-[`areas.ts`](src/lib/areas.ts) e é conferido no servidor.
+Uma exceção à leitura aberta: a coleção `configuracoes`, que guarda o token do
+Holyrics, é fechada dos dois lados. Ela é o único lugar do Coredja onde a
+negação de **leitura** importa — nas demais o conteúdo não é sensível e o
+navegador precisa escutá-lo para o tempo real.
 
 Para publicar mudanças nas regras: Console do Firebase → Firestore → aba
 **Regras** → colar o conteúdo de `firestore.rules` → **Publicar**.
@@ -275,8 +267,6 @@ acessam de qualquer lugar. O plano gratuito da Netlify dá conta.
 |---|---|
 | `COREDJA_STORAGE` | `firebase` |
 | `FIREBASE_CREDENCIAIS_JSON` | O conteúdo **inteiro** de `segredos/firebase-admin.json` |
-| `COREDJA_TOKEN_CANTINA` | Um segredo seu (letras e números) |
-| `COREDJA_TOKEN_KIDS` | Outro segredo seu |
 | `NEXT_PUBLIC_FIREBASE_API_KEY` | do `.env.local` |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | do `.env.local` |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | do `.env.local` |
@@ -288,13 +278,23 @@ acessam de qualquer lugar. O plano gratuito da Netlify dá conta.
 
 ### O que muda quando está publicado
 
-**Os links viram públicos.** Hoje só quem está no Wi-Fi da igreja alcança a
-plataforma. Publicada, qualquer pessoa com o link de uma área pode mandar
-recado, de qualquer lugar do mundo. Continua sendo aceitável para o uso — mas
-se um link vazar num grupo, troque o `token` em
-[`areas.ts`](src/lib/areas.ts) e publique de novo.
+**Todo acesso passa a exigir login.** Os links secretos das áreas
+(`/a/cantina-SEGREDO`) foram removidos justamente por causa disto: publicados,
+eles dariam acesso de escrita a qualquer pessoa do mundo que os tivesse. Cada
+pessoa da Cantina e do Kids precisa de conta própria, criada em **Usuários**,
+com um departamento e a lista de com quem ela pode conversar.
 
-**O PC deixa de ser necessário.** Nada para ligar no domingo.
+**O PC deixa de ser necessário — menos para o Holyrics.** Nada para ligar no
+domingo para o Coredja funcionar. Mas o Holyrics roda na máquina da igreja, e
+um servidor na internet **não alcança** um endereço `192.168.x.x`: essa faixa
+é privada por norma (RFC 1918) e existe só dentro daquela rede. Não é questão
+de configuração — não há endereço a configurar que resolva.
+
+Consequência prática: publicado, deixe `HOLYRICS_URL` e `HOLYRICS_TOKEN`
+**vazios**. Tudo continua funcionando, exceto projetar aviso e cronômetro
+automaticamente no telão, que voltam a ser feitos à mão no próprio Holyrics.
+Para recuperar isso é preciso algo rodando dentro da rede da igreja fazendo a
+ponte — ver "O que vem depois".
 
 ### Sobre índices
 
@@ -312,14 +312,13 @@ isso é instantâneo. Se um dia o histórico crescer muito, aí vale criar os
 monitor, que acende quando chega recado. É um programa à parte (Electron) e
 não depende do Holyrics para funcionar.
 
-**Integração com o Holyrics.** Mandar um recado ou um banner direto para o
-telão, sem passar pelo download. O Holyrics tem uma API que roda na máquina
-dele, então isso exige que a plataforma alcance essa máquina na rede da
-igreja.
-
-**Login.** Quando as áreas crescerem, os links secretos podem dar lugar a
-contas de verdade. A estrutura já separa "qual é a área" de "como ela se
-identifica", então essa troca não mexe nas telas.
+**Ponte para o Holyrics.** A integração já existe e funciona quando o Coredja
+roda na rede da igreja (ver [`holyrics.ts`](src/lib/holyrics.ts) e a tela de
+**Configurações**). O que falta é fazê-la funcionar com o Coredja hospedado:
+um programa pequeno rodando no PC do audiovisual, que lê do Firestore o que
+precisa ir para o telão e repassa ao Holyrics ali mesmo, na rede local. Sobe
+junto com o Windows, sem ninguém digitar comando — o PC do audiovisual já
+fica ligado no domingo de qualquer forma, porque o Holyrics depende dele.
 
 ---
 
@@ -342,14 +341,16 @@ src/
 │  ├─ useEventos.ts       Recebe os avisos de tempo real
 │  └─ useAlertaSonoro.ts  Som de recado novo
 └─ lib/
-   ├─ types.ts            Contrato de dados (Area, Mensagem, Store)
+   ├─ types.ts            Contrato de dados (Departamento, Mensagem, Store)
    ├─ conversas.ts        Monta a lista de conversas do painel
    ├─ store.ts            Escolhe o armazenamento (sqlite ou firebase)
    ├─ sqlite-store.ts     Implementação local
    ├─ db.ts               Conexão e schema do SQLite
    ├─ firebase-store.ts   Implementação na nuvem
    ├─ firebase.ts         Conexão com o Firestore
-   ├─ areas.ts            As áreas da igreja e seus links
+   ├─ papeis.ts           Cargos, permissões e quem fala com quem
+   ├─ configuracoes.ts    Configuração gravada no banco (Holyrics)
+   ├─ holyrics.ts         Envio de aviso e cronômetro para o telão
    ├─ uploads.ts          Validação e gravação das imagens
    ├─ limites.ts          Limites de tamanho, usados nos dois lados
    └─ eventos.ts          Publicação dos avisos de tempo real
