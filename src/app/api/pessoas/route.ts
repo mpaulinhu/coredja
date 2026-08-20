@@ -1,4 +1,3 @@
-import { AREAS } from '@/lib/areas';
 import { pessoasStore } from '@/lib/pessoas-store';
 import { podeFazer, type Papel } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
@@ -13,9 +12,12 @@ const PAPEIS_VALIDOS: Papel[] = ['admin', 'lider', 'coordenador', 'operador'];
  * de `areasVisiveis`) e a lista de departamentos (seletor de
  * `departamento`). Só quem tem `pessoas:escrever` (admin).
  *
- * As áreas vêm sem o `token` — `AREAS` de `areas.ts` inclui o campo no tipo,
- * mas aqui só repassamos slug/nome/cor: o token nunca deve chegar ao
- * navegador de uma pessoa, só ao link secreto de cada área.
+ * `areas` e `departamentos` são hoje A MESMA lista, e é de propósito. Antes,
+ * `areas` vinha de `AREAS` (Cantina e Kids fixos em código) e alimentava os
+ * checkboxes de `areasVisiveis`. Com o CRUD de Departamentos, isso virou um
+ * bug latente: um departamento criado na tela nunca aparecia como opção de
+ * conversa, porque a lista de origem era outra. O campo `areas` continua na
+ * resposta só para não quebrar quem já consome — a fonte é uma só.
  *
  * `departamentos` continua vindo aqui mesmo depois de `GET
  * /api/departamentos` passar a existir: a tela de Usuários precisa das três
@@ -37,7 +39,8 @@ export async function GET(request: Request) {
     pessoasStore.listar(),
     store.listarDepartamentos(),
   ]);
-  const areas = AREAS.map(({ slug, nome, cor }) => ({ slug, nome, cor }));
+  // Mesma lista nos dois campos — ver a nota acima.
+  const areas = departamentos.map(({ slug, nome, cor }) => ({ slug, nome, cor }));
   return Response.json({ pessoas, areas, departamentos });
 }
 
