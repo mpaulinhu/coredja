@@ -22,21 +22,22 @@
  * janela responde com o que já se sabe, sem tocar a rede.
  *
  * ────────────────────────────────────────────────────────────────────────────
- * O QUE MUDA QUANDO A PONTE EXISTIR
+ * DOIS CAMINHOS, NA ORDEM CERTA
  * ────────────────────────────────────────────────────────────────────────────
- * Hoje o servidor fala direto com o Holyrics, o que só funciona quando os dois
- * estão na mesma rede. Publicado na internet, isso deixa de valer (endereço
- * `192.168.x.x` é privado — ver o cabeçalho de `holyrics.ts`), e a resposta
- * daqui passa a ser sempre "desconectado", corretamente: o telão de fato não
- * é alcançável dali.
+ * 1. **A ponte deu sinal?** Então o telão está alcançável por ela, e pronto.
+ *    É o caminho do Coredja publicado, onde sondar o Holyrics direto sempre
+ *    falharia (o servidor não alcança `192.168.x.x` — ver `telao-fila.ts`).
  *
- * Quando a ponte existir — um programa no PC do audiovisual repassando os
- * comandos —, é ela quem vai registrar que está viva, e esta função passa a
- * ler esse registro em vez de sondar a rede. A ASSINATURA não muda, então as
- * telas que já mostram o selo não precisam ser tocadas de novo.
+ * 2. **Não há ponte?** Sonda o Holyrics direto. É o caminho do Coredja rodando
+ *    no PC da igreja, onde os dois estão na mesma rede e não existe ponte
+ *    nenhuma para dar sinal.
+ *
+ * A ordem importa: perguntar pela ponte primeiro evita gastar 1,5s de espera
+ * numa sonda que se sabe de antemão que vai falhar.
  */
 
 import { configHolyrics } from './holyrics';
+import { ponteEstaViva } from './telao-fila-store';
 
 /**
  * Quanto tempo uma resposta vale antes de perguntar de novo.
@@ -119,6 +120,15 @@ export function esquecerEstadoDoTelao(): void {
 async function sondar(): Promise<EstadoDoTelao> {
   const config = await configHolyrics();
   if (!config) return 'nao-configurado';
+
+  // A ponte manda ver primeiro. Com o Coredja publicado, sondar o Holyrics
+  // direto SEMPRE falha (o servidor não alcança `192.168.x.x`), então sem
+  // esta checagem o selo diria "desconectado" o tempo todo — inclusive com
+  // tudo funcionando pela ponte, que é o cenário normal quando hospedado.
+  //
+  // Rodando na rede da igreja não há ponte nenhuma, `ponteEstaViva()` devolve
+  // falso, e a sonda direta abaixo decide — como antes.
+  if (await ponteEstaViva()) return 'conectado';
 
   try {
     const resposta = await fetch(

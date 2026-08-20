@@ -127,6 +127,27 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Fila de comandos para o telão e sinal de vida da ponte — ver
+    // `src/lib/telao-fila.ts`.
+    //
+    // FECHADAS DOS DOIS LADOS, como `configuracoes` e diferente de
+    // `mensagens`/`avisos`/`culto`. Aqui não há motivo para o navegador
+    // participar: quem escreve é o servidor do Coredja (Admin SDK, que ignora
+    // estas regras) e quem lê é a ponte, que roda no PC do audiovisual com
+    // credencial própria de administrador — nunca uma página aberta.
+    //
+    // Deixar a leitura aberta "porque não é dado sensível" seria um erro
+    // diferente do óbvio: a fila não carrega segredo, mas carrega o que vai
+    // ao telão da igreja em tempo real, e escrita aberta deixaria qualquer
+    // pessoa projetar o que quisesse durante o culto.
+    match /telao_comandos/{comando} {
+      allow read, write: if false;
+    }
+
+    match /telao_estado/{documento} {
+      allow read, write: if false;
+    }
+
     // Qualquer outra coleção fica fechada por padrão. Sem este bloco, uma
     // coleção nova criada no futuro herdaria o comportamento errado.
     match /{documento=**} {

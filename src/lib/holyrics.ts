@@ -30,6 +30,8 @@
  */
 
 import { lerConfiguracoesGravadas, resolver } from './configuracoes';
+import { enfileirarComando, ponteEstaViva } from './telao-fila-store';
+import type { TipoDeComando } from './telao-fila';
 
 /** Quanto esperar antes de desistir. Curto: no domingo ninguém espera. */
 const TEMPO_LIMITE_MS = 5000;
@@ -126,26 +128,25 @@ export async function enviarAvisoAoHolyrics(aviso: {
     .filter(Boolean)
     .join('\n');
 
-  try {
-    // `SetTextCommunicationPanel`, e não `ShowAnnouncement`: testado contra um
-    // Holyrics real (20/08/2026), o `ShowAnnouncement` responde
-    // `{"status":"error","error":"Item not found"}` — ele EXIBE um anúncio já
-    // cadastrado no Holyrics, procurando por id/nome, e não aceita texto novo
-    // vindo de fora. O painel de comunicação aceita, que é o que precisamos.
-    const resultado = await chamar(config, 'SetTextCommunicationPanel', {
-      text: texto,
-      show: true,
-    });
+  // `SetTextCommunicationPanel`, e não `ShowAnnouncement`: testado contra um
+  // Holyrics real (20/08/2026), o `ShowAnnouncement` responde
+  // `{"status":"error","error":"Item not found"}` — ele EXIBE um anúncio já
+  // cadastrado no Holyrics, procurando por id/nome, e não aceita texto novo
+  // vindo de fora. O painel de comunicação aceita, que é o que precisamos.
+  const resultado = await entregar(
+    () => chamar(config, 'SetTextCommunicationPanel', { text: texto, show: true }),
+    {
+      tipo: 'aviso-projetar',
+      dados: { titulo: aviso.titulo.trim(), texto: aviso.texto.trim() },
+    },
+  );
 
-    // Deu certo, mas o aviso tinha arte junto: quem publicou precisa saber
-    // que só o texto chegou lá, senão conta com uma arte que não subiu.
-    if (resultado.estado === 'enviado' && aviso.imagem) {
-      return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
-    }
-    return resultado;
-  } catch (erro) {
-    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+  // Deu certo, mas o aviso tinha arte junto: quem publicou precisa saber
+  // que só o texto chegou lá, senão conta com uma arte que não subiu.
+  if (resultado.estado === 'enviado' && aviso.imagem) {
+    return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
   }
+  return resultado;
 }
 
 /**
@@ -175,20 +176,23 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
     .filter(Boolean)
     .join(' — ');
 
-  try {
-    const resultado = await chamar(config, 'AddToPlaylist', {
-      items: [{ type: 'title', name: texto }],
-      index: -1, // -1 = no fim da fila
-      ignore_duplicates: true,
-    });
+  const resultado = await entregar(
+    () =>
+      chamar(config, 'AddToPlaylist', {
+        items: [{ type: 'title', name: texto }],
+        index: -1, // -1 = no fim da fila
+        ignore_duplicates: true,
+      }),
+    {
+      tipo: 'aviso-fila',
+      dados: { titulo: aviso.titulo.trim(), texto: aviso.texto.trim() },
+    },
+  );
 
-    if (resultado.estado === 'enviado' && aviso.imagem) {
-      return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
-    }
-    return resultado;
-  } catch (erro) {
-    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+  if (resultado.estado === 'enviado' && aviso.imagem) {
+    return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
   }
+  return resultado;
 }
 
 /** Tira o aviso do telão do Holyrics. Mesmo contrato de `enviarAviso`. */
@@ -196,12 +200,54 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
+  return entregar(
+    () => chamar(config, 'SetTextCommunicationPanel', { text: '', show: false }),
+    { tipo: 'aviso-limpar', dados: {} },
+  );
+}
+
+/**
+ * Entrega o comando pelo caminho que existir: direto, se o Holyrics estiver
+ * ao alcance; pela fila da ponte, se não estiver.
+ *
+ * É o que faz as MESMAS rotas funcionarem nos dois cenários sem saber em qual
+ * estão rodando:
+ *
+ * - **Coredja no PC da igreja** (o `Coredja.bat`): o servidor está na mesma
+ *   rede, `executar()` alcança o Holyrics, e a fila nunca entra em cena.
+ * - **Coredja publicado**: o servidor não alcança `192.168.x.x` (ver o
+ *   cabeçalho de `telao-fila.ts`), `executar()` falha por rede, e o comando
+ *   vai para a fila — a ponte no PC do audiovisual pega e executa ali.
+ *
+ * A ORDEM importa e é deliberada: tenta direto PRIMEIRO. O caminho direto é
+ * instantâneo e devolve o resultado real do Holyrics ("token recusado", "ação
+ * não liberada"), coisa que a fila não tem como devolver — quando o comando é
+ * enfileirado, a resposta só diz que foi entregue à ponte, não que deu certo
+ * lá. Preferir a fila quando o direto funciona trocaria diagnóstico preciso
+ * por incerteza, de graça.
+ *
+ * Só desvia para a fila em falha de REDE (o `catch`). Um Holyrics que
+ * respondeu e recusou não é caso de ponte: enfileirar repetiria a recusa
+ * alguns segundos depois, agora sem a mensagem que explica o motivo.
+ */
+async function entregar(
+  executar: () => Promise<ResultadoHolyrics>,
+  comando: { tipo: TipoDeComando; dados: Record<string, unknown> },
+): Promise<ResultadoHolyrics> {
   try {
-    return await chamar(config, 'SetTextCommunicationPanel', {
-      text: '',
-      show: false,
-    });
+    return await executar();
   } catch (erro) {
+    // Não alcançou. Se há ponte viva, ela resolve.
+    if (await ponteEstaViva()) {
+      const enfileirou = await enfileirarComando(comando.tipo, comando.dados);
+      if (enfileirou) return { estado: 'enviado' };
+
+      return {
+        estado: 'falhou',
+        motivo:
+          'Não foi possível deixar o comando para o computador do audiovisual. Projete pelo Holyrics.',
+      };
+    }
     return { estado: 'falhou', motivo: mensagemDoErro(erro) };
   }
 }
@@ -282,11 +328,10 @@ export async function iniciarCronometroNoHolyrics(
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  try {
-    return await ligarCronometro(config, minutos * 60);
-  } catch (erro) {
-    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
-  }
+  return entregar(() => ligarCronometro(config, minutos * 60), {
+    tipo: 'cronometro-iniciar',
+    dados: { minutos },
+  });
 }
 
 /** Desliga o cronômetro do painel. Mesmo contrato das outras. */
@@ -294,11 +339,10 @@ export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  try {
-    return await chamar(config, 'StopCountdownCommunicationPanel', {});
-  } catch (erro) {
-    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
-  }
+  return entregar(
+    () => chamar(config, 'StopCountdownCommunicationPanel', {}),
+    { tipo: 'cronometro-parar', dados: {} },
+  );
 }
 
 /**
@@ -326,17 +370,27 @@ export async function somarTempoAoCronometroNoHolyrics(
 
   const extras = Math.round(minutosExtras * 60);
 
-  try {
-    const info = await lerPainelDoHolyrics(config);
+  // Este é o único comando que PRECISA ler o painel antes de escrever, e por
+  // isso é o único que não pode ser resolvido aqui e mandado pronto para a
+  // ponte. O quanto somar depende de quanto falta AGORA, e quem tem essa
+  // resposta é quem alcança o Holyrics — que, com o Coredja publicado, é a
+  // ponte e não este servidor.
+  //
+  // Então o que vai para a fila é a INTENÇÃO ("some 5 minutos"), e a ponte
+  // faz o ler-e-reiniciar do lado dela. Enfileirar um total absoluto
+  // calculado aqui seria calcular sobre um valor que não se pôde ler.
+  return entregar(
+    async () => {
+      const info = await lerPainelDoHolyrics(config);
 
-    // Sem cronômetro no ar (nunca ligou, ou pararam): "dar mais X minutos"
-    // vira simplesmente ligar um de X minutos, que é o que quem clicou espera.
-    const restante = info?.countdown_show ? (info.countdown_time ?? 0) : 0;
+      // Sem cronômetro no ar (nunca ligou, ou pararam): "dar mais X minutos"
+      // vira simplesmente ligar um de X minutos, que é o que quem clicou espera.
+      const restante = info?.countdown_show ? (info.countdown_time ?? 0) : 0;
 
-    return await ligarCronometro(config, restante + extras);
-  } catch (erro) {
-    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
-  }
+      return ligarCronometro(config, restante + extras);
+    },
+    { tipo: 'cronometro-somar', dados: { minutos: minutosExtras } },
+  );
 }
 
 /**
@@ -353,11 +407,10 @@ export async function definirCronometroNoHolyrics(
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  try {
-    return await ligarCronometro(config, segundos);
-  } catch (erro) {
-    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
-  }
+  return entregar(() => ligarCronometro(config, segundos), {
+    tipo: 'cronometro-definir',
+    dados: { segundos },
+  });
 }
 
 /**
