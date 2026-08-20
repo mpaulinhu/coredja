@@ -75,6 +75,94 @@ function etiquetaDoAviso(aviso: Aviso, hoje: string): string {
 }
 
 /**
+ * Um dia da lista, com os avisos que passam nele.
+ *
+ * `dia` é `null` no grupo do "vale sempre" — o único que não tem data. Fora
+ * ele, `dia` é `"YYYY-MM-DD"`, o mesmo formato de `Aviso.dias`.
+ */
+interface GrupoDeAvisos {
+  dia: string | null;
+  avisos: Aviso[];
+}
+
+/**
+ * Quebra a lista corrida em grupos por dia.
+ *
+ * Um aviso marcado para 23 e 30 aparece nos DOIS grupos, de propósito: quem
+ * abre o dia 30 precisa ver tudo que passa naquele domingo, e não só o que foi
+ * cadastrado exclusivamente para ele. É a razão de a `key` do React ter que
+ * combinar dia + id — só `aviso.id` se repetiria entre grupos.
+ *
+ * Avisos sem dia marcado ("vale sempre") NÃO são espalhados por todos os dias:
+ * eles valem para qualquer data, então replicá-los em cada grupo encheria a
+ * lista de repetição sem informação nova. Ficam num grupo próprio, ao final.
+ */
+function agruparPorDia(avisos: Aviso[]): GrupoDeAvisos[] {
+  const porDia = new Map<string, Aviso[]>();
+  const semDia: Aviso[] = [];
+
+  for (const aviso of avisos) {
+    if (aviso.dias.length === 0) {
+      semDia.push(aviso);
+      continue;
+    }
+    for (const dia of aviso.dias) {
+      const atuais = porDia.get(dia);
+      if (atuais) atuais.push(aviso);
+      else porDia.set(dia, [aviso]);
+    }
+  }
+
+  const comDia = [...porDia.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dia, lista]) => ({ dia, avisos: lista }));
+
+  return semDia.length > 0 ? [...comDia, { dia: null, avisos: semDia }] : comDia;
+}
+
+/**
+ * A ordem em que os grupos aparecem: HOJE primeiro, depois os dias futuros em
+ * ordem cronológica, e por último "Vale sempre".
+ *
+ * Hoje na frente porque é domingo de manhã que esta tela é usada de verdade —
+ * quem está na cabine quer o telão de hoje no topo, sem rolar. "Vale sempre"
+ * desce porque é o único grupo sem urgência de data: continua valendo amanhã,
+ * na semana que vem e no mês que vem, então nunca é o que alguém procura
+ * primeiro.
+ *
+ * Os dias JÁ PASSADOS não entram aqui — saem por `ehGrupoPassado` e ficam
+ * atrás de um botão ("Ver dias anteriores"), mesmo tratamento que
+ * `ListaCultos` dá às ordens antigas. Nada é apagado quando a data passa, e
+ * sem esse recolhimento a lista viraria um arquivo histórico em poucas
+ * semanas, com o domingo de hoje soterrado.
+ */
+function ordenarGrupos(grupos: GrupoDeAvisos[], hoje: string): GrupoDeAvisos[] {
+  return [...grupos].sort((a, b) => peso(a, hoje) - peso(b, hoje) || comparar(a, b));
+}
+
+function peso(grupo: GrupoDeAvisos, hoje: string): number {
+  if (grupo.dia === hoje) return 0;
+  if (grupo.dia === null) return 2;
+  return grupo.dia > hoje ? 1 : 3;
+}
+
+function comparar(a: GrupoDeAvisos, b: GrupoDeAvisos): number {
+  return (a.dia ?? '').localeCompare(b.dia ?? '');
+}
+
+/** Um dia que já passou. "Vale sempre" nunca é passado — não tem data. */
+function ehGrupoPassado(grupo: GrupoDeAvisos, hoje: string): boolean {
+  return grupo.dia !== null && grupo.dia < hoje;
+}
+
+/** O título do cabeçalho de grupo. "Hoje" ganha nome próprio. */
+function tituloDoGrupo(grupo: GrupoDeAvisos, hoje: string): string {
+  if (grupo.dia === null) return 'Vale sempre';
+  if (grupo.dia === hoje) return `Hoje · ${dataPorExtenso(grupo.dia)}`;
+  return dataPorExtenso(grupo.dia);
+}
+
+/**
  * Avisos do Telão: cadastro (quem pode) + prévia + lista com os botões de
  * publicar.
  *
@@ -98,6 +186,7 @@ export function TelaAvisos() {
   const [holyricsLigado, setHolyricsLigado] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
+  const [mostrarPassados, setMostrarPassados] = useState(false);
 
   // O que está sendo digitado no formulário, espelhado aqui para a prévia
   // conseguir mostrá-lo ao vivo. Mora no pai porque prévia e formulário são
@@ -220,6 +309,26 @@ export function TelaAvisos() {
     () => (avisos ?? []).filter((a) => passaNoFiltro(a, filtro, hoje)),
     [avisos, filtro, hoje],
   );
+
+  /**
+   * O agrupamento roda DEPOIS do filtro, sobre `visiveis` — é o que faz as
+   * duas coisas conviverem sem regra extra: "Hoje" deixa passar só quem vale
+   * hoje, então sobra o grupo de hoje (mais os "vale sempre", que valem hoje
+   * também); "Vale sempre" deixa passar só quem não tem dia, então sobra o
+   * grupo sem data; "Programados" tira os sem data e os grupos com data
+   * seguem. Filtrar depois de agrupar exigiria refazer a mesma decisão em
+   * dois lugares.
+   */
+  const grupos = useMemo(() => ordenarGrupos(agruparPorDia(visiveis), hoje), [visiveis, hoje]);
+
+  const gruposPassados = useMemo(
+    () => grupos.filter((g) => ehGrupoPassado(g, hoje)),
+    [grupos, hoje],
+  );
+
+  const gruposVisiveis = mostrarPassados
+    ? grupos
+    : grupos.filter((g) => !ehGrupoPassado(g, hoje));
 
   /**
    * O aviso que a prévia mostra quando não se está digitando: o selecionado,
@@ -460,130 +569,223 @@ export function TelaAvisos() {
             </p>
           </div>
         ) : (
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(360px,100%),1fr))] gap-4">
-            {visiveis.map((aviso) => {
-              const soImagem = ehSoImagem(aviso);
-              const ehDeHoje = valeNoDia(aviso, hoje);
-              const escolhido = selecionado?.id === aviso.id && !digitando;
+          <div className="flex flex-col gap-7">
+            {gruposVisiveis.map((grupo) => {
+              const ehHoje = grupo.dia === hoje;
+              const passado = ehGrupoPassado(grupo, hoje);
 
               return (
-                <li key={aviso.id}>
-                  <article
-                    className="flex h-full flex-col gap-4 rounded-2xl border p-4 sm:p-5"
-                    style={{
-                      borderColor: aviso.noAr
-                        ? 'var(--acento-suave-borda)'
-                        : escolhido
-                          ? 'var(--borda-forte)'
-                          : 'var(--borda)',
-                      background: aviso.noAr
-                        ? 'var(--acento-suave-fundo)'
-                        : 'var(--fundo-cartao)',
-                    }}
-                  >
-                    {/* O cartão inteiro seleciona (é o que a referência faz
-                        com `c.select`), mas o alvo clicável é um BOTÃO em
-                        volta do conteúdo — e não um `onClick` na `<li>` —
-                        para quem navega por teclado alcançar a seleção. */}
-                    <button
-                      type="button"
-                      onClick={() => setSelecionadoId(aviso.id)}
-                      aria-pressed={escolhido}
-                      className="flex cursor-pointer items-start gap-3.5 text-left"
+                <section key={grupo.dia ?? 'sempre'} className="flex flex-col gap-3.5">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* O grupo de hoje ganha ponto de acento + rótulo em
+                        laranja: no domingo é o único que interessa, e ele
+                        precisa ser achado sem ler os cabeçalhos um a um. */}
+                    {ehHoje && (
+                      <span
+                        aria-hidden="true"
+                        className="pulso-ao-vivo inline-block h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: 'var(--acento)' }}
+                      />
+                    )}
+                    <Rotulo
+                      tom={ehHoje ? 'acento' : 'fraco'}
+                      className={`first-letter:uppercase ${passado ? 'opacity-75' : ''}`}
                     >
-                      <div className="shrink-0">
-                        {aviso.imagem ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={aviso.imagem.url}
-                            alt=""
-                            className="h-14 w-20 rounded-lg border border-borda object-cover"
-                          />
-                        ) : (
-                          <div
-                            aria-hidden="true"
-                            className="flex h-14 w-20 items-center justify-center rounded-lg border border-borda"
-                            style={{ background: 'var(--fundo-elevado)' }}
-                          >
-                            <Numero className="text-[10px] text-texto-fraco">
-                              TEXTO
-                            </Numero>
-                          </div>
-                        )}
-                      </div>
+                      {tituloDoGrupo(grupo, hoje)}
+                    </Rotulo>
+                    <Numero className="text-xs text-texto-fraco">
+                      {grupo.avisos.length === 1
+                        ? '1 aviso'
+                        : `${grupo.avisos.length} avisos`}
+                    </Numero>
+                  </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Selo
-                            tom={
-                              aviso.noAr ? 'acento' : ehDeHoje ? 'sucesso' : 'neutro'
-                            }
-                          >
-                            {etiquetaDoAviso(aviso, hoje)}
-                          </Selo>
-                          {aviso.dias.length > 0 && (
-                            <Numero className="text-xs text-texto-fraco">
-                              {aviso.dias.map(formatarDia).join(' · ')}
-                            </Numero>
-                          )}
-                        </div>
-
-                        <p className="mt-2 truncate font-bold text-texto">
-                          {aviso.titulo.trim() || 'Aviso em imagem'}
-                        </p>
-                        {aviso.texto && (
-                          <p className="mt-0.5 truncate text-sm text-texto-suave">
-                            {aviso.texto}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-
-                    <div className="mt-auto flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => mexerNoTelao(aviso.id, !aviso.noAr)}
-                        className="min-h-11 min-w-0 flex-1 cursor-pointer rounded-xl px-3 text-sm font-bold transition-colors"
-                        style={{
-                          background: aviso.noAr ? 'var(--borda-forte)' : 'var(--acento)',
-                          color: aviso.noAr ? 'var(--texto)' : 'var(--acento-texto)',
-                        }}
-                      >
-                        {aviso.noAr
-                          ? 'Tirar da tela de retorno'
-                          : holyricsLigado
-                            ? 'Projetar tela de retorno'
-                            : 'Publicar no telão'}
-                      </button>
-
-                      {holyricsLigado && !soImagem && (
-                        <button
-                          type="button"
-                          onClick={() => mandarParaFila(aviso.id)}
-                          className="min-h-11 cursor-pointer rounded-xl border border-borda px-3.5 text-sm font-semibold text-texto-suave transition-colors hover:border-borda-forte hover:text-texto"
-                        >
-                          Avisar audiovisual
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => remover(aviso.id)}
-                        aria-label={`Remover o aviso ${aviso.titulo.trim() || 'em imagem'}`}
-                        className="min-h-11 w-11 cursor-pointer rounded-xl border border-borda text-texto-fraco transition-colors hover:text-texto"
-                        style={{ borderColor: 'var(--borda)' }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </article>
-                </li>
+                  <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(360px,100%),1fr))] gap-4">
+                    {grupo.avisos.map((aviso) => (
+                      // A key combina dia + id: o MESMO aviso aparece em vários
+                      // grupos quando tem vários dias marcados, e só `aviso.id`
+                      // se repetiria entre eles.
+                      <li key={`${grupo.dia ?? 'sempre'}:${aviso.id}`}>
+                        <CartaoDeAviso
+                          aviso={aviso}
+                          hoje={hoje}
+                          holyricsLigado={holyricsLigado}
+                          escolhido={selecionado?.id === aviso.id && !digitando}
+                          onSelecionar={() => setSelecionadoId(aviso.id)}
+                          onTelao={() => mexerNoTelao(aviso.id, !aviso.noAr)}
+                          onFila={() => mandarParaFila(aviso.id)}
+                          onRemover={() => remover(aviso.id)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               );
             })}
-          </ul>
+
+            {/* Todos os grupos que restaram são de dias passados: sem esta
+                linha a lista ficaria só com o botão de revelar, parecendo
+                vazia por engano. */}
+            {gruposVisiveis.length === 0 && (
+              <p className="text-sm text-texto-suave">
+                Nenhum aviso para hoje ou para os próximos dias.
+              </p>
+            )}
+
+            {/* Nada é apagado quando a data passa, então os dias vencidos
+                continuam existindo — só saem da frente. Mesmo tratamento que
+                `ListaCultos` dá às ordens antigas. */}
+            {gruposPassados.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMostrarPassados((v) => !v)}
+                className="min-h-11 cursor-pointer self-start text-sm text-texto-suave underline underline-offset-4 hover:text-texto"
+              >
+                {mostrarPassados
+                  ? 'Esconder dias anteriores'
+                  : `Ver dias anteriores (${gruposPassados.length})`}
+              </button>
+            )}
+          </div>
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Um aviso na lista.
+ *
+ * Virou componente quando a lista passou a ser AGRUPADA por dia: o mesmo
+ * aviso aparece em mais de um grupo quando tem mais de um dia marcado, e o
+ * cartão inteiro repetido dentro de dois `.map` aninhados no corpo da tela
+ * ficaria ilegível.
+ */
+function CartaoDeAviso({
+  aviso,
+  hoje,
+  holyricsLigado,
+  escolhido,
+  onSelecionar,
+  onTelao,
+  onFila,
+  onRemover,
+}: {
+  aviso: Aviso;
+  hoje: string;
+  holyricsLigado: boolean;
+  escolhido: boolean;
+  onSelecionar: () => void;
+  onTelao: () => void;
+  onFila: () => void;
+  onRemover: () => void;
+}) {
+  const soImagem = ehSoImagem(aviso);
+  const ehDeHoje = valeNoDia(aviso, hoje);
+
+  return (
+    <article
+      className="flex h-full flex-col gap-4 rounded-2xl border p-4 sm:p-5"
+      style={{
+        borderColor: aviso.noAr
+          ? 'var(--acento-suave-borda)'
+          : escolhido
+            ? 'var(--borda-forte)'
+            : 'var(--borda)',
+        background: aviso.noAr ? 'var(--acento-suave-fundo)' : 'var(--fundo-cartao)',
+      }}
+    >
+      {/* O cartão inteiro seleciona (é o que a referência faz com
+          `c.select`), mas o alvo clicável é um BOTÃO em volta do conteúdo —
+          e não um `onClick` na `<li>` — para quem navega por teclado
+          alcançar a seleção. */}
+      <button
+        type="button"
+        onClick={onSelecionar}
+        aria-pressed={escolhido}
+        className="flex cursor-pointer items-start gap-3.5 text-left"
+      >
+        <div className="shrink-0">
+          {aviso.imagem ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={aviso.imagem.url}
+              alt=""
+              className="h-14 w-20 rounded-lg border border-borda object-cover"
+            />
+          ) : (
+            <div
+              aria-hidden="true"
+              className="flex h-14 w-20 items-center justify-center rounded-lg border border-borda"
+              style={{ background: 'var(--fundo-elevado)' }}
+            >
+              <Numero className="text-[10px] text-texto-fraco">TEXTO</Numero>
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Selo tom={aviso.noAr ? 'acento' : ehDeHoje ? 'sucesso' : 'neutro'}>
+              {etiquetaDoAviso(aviso, hoje)}
+            </Selo>
+            {aviso.dias.length > 1 && (
+              // Só quando há MAIS de um dia: dentro de um grupo por data,
+              // repetir a data do próprio cabeçalho não diz nada — o que
+              // importa é avisar que este aviso também passa em outros dias.
+              <Numero className="text-xs text-texto-fraco">
+                {aviso.dias.map(formatarDia).join(' · ')}
+              </Numero>
+            )}
+          </div>
+
+          <p className="mt-2 truncate font-bold text-texto">
+            {aviso.titulo.trim() || 'Aviso em imagem'}
+          </p>
+          {aviso.texto && (
+            <p className="mt-0.5 truncate text-sm text-texto-suave">{aviso.texto}</p>
+          )}
+        </div>
+      </button>
+
+      <div className="mt-auto flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onTelao}
+          className="min-h-11 min-w-0 flex-1 cursor-pointer rounded-xl px-3 text-sm font-bold transition-colors"
+          style={{
+            background: aviso.noAr ? 'var(--borda-forte)' : 'var(--acento)',
+            color: aviso.noAr ? 'var(--texto)' : 'var(--acento-texto)',
+          }}
+        >
+          {aviso.noAr
+            ? 'Tirar da tela de retorno'
+            : holyricsLigado
+              ? 'Projetar tela de retorno'
+              : 'Publicar no telão'}
+        </button>
+
+        {holyricsLigado && !soImagem && (
+          <button
+            type="button"
+            onClick={onFila}
+            className="min-h-11 cursor-pointer rounded-xl border border-borda px-3.5 text-sm font-semibold text-texto-suave transition-colors hover:border-borda-forte hover:text-texto"
+          >
+            Avisar audiovisual
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={onRemover}
+          aria-label={`Remover o aviso ${aviso.titulo.trim() || 'em imagem'}`}
+          className="min-h-11 w-11 cursor-pointer rounded-xl border border-borda text-texto-fraco transition-colors hover:text-texto"
+          style={{ borderColor: 'var(--borda)' }}
+        >
+          ✕
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -667,11 +869,9 @@ function FormularioNovoAviso({
     if (inputArquivo.current) inputArquivo.current.value = '';
   }
 
-  function adicionarDia() {
-    if (!diaEscolhido) return;
-    setDias((atuais) =>
-      atuais.includes(diaEscolhido) ? atuais : [...atuais, diaEscolhido].sort(),
-    );
+  function adicionarDia(dia: string = diaEscolhido) {
+    if (!dia) return;
+    setDias((atuais) => (atuais.includes(dia) ? atuais : [...atuais, dia].sort()));
     setDiaEscolhido('');
   }
 
@@ -824,9 +1024,22 @@ function FormularioNovoAviso({
             aria-label="Dia em que o aviso vale"
             className={`${campo} numero h-13 min-w-0 flex-1`}
           />
+          {/* "Hoje" ADICIONA direto, em vez de só preencher o campo: o
+              caso real é cadastrar de manhã o aviso do culto daqui a pouco, e
+              obrigar a clicar "Adicionar dia" logo depois seria um clique a
+              mais sem escolha nenhuma no meio. Fica desabilitado quando hoje
+              já está na lista — sem isso o botão pareceria não fazer nada. */}
           <button
             type="button"
-            onClick={adicionarDia}
+            onClick={() => adicionarDia(hojeLocal())}
+            disabled={dias.includes(hojeLocal())}
+            className="min-h-13 shrink-0 cursor-pointer rounded-xl border border-borda-forte bg-fundo-cartao px-4 text-sm font-bold text-texto-suave transition-colors hover:text-texto disabled:cursor-default disabled:opacity-50"
+          >
+            Hoje
+          </button>
+          <button
+            type="button"
+            onClick={() => adicionarDia()}
             disabled={!diaEscolhido}
             className="min-h-13 shrink-0 cursor-pointer rounded-xl border border-borda-forte bg-fundo-cartao px-4 text-sm font-bold text-texto-suave transition-colors hover:text-texto disabled:cursor-default disabled:opacity-50"
           >
