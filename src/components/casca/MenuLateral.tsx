@@ -7,6 +7,7 @@ import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
 import {
   IconeAoVivo,
   IconeAvisos,
+  IconeConfiguracoes,
   IconeCulto,
   IconeDepartamentos,
   IconeFechar,
@@ -61,6 +62,9 @@ const ITENS: ItemDeMenu[] = [
 const ITENS_DE_ADMIN: ItemDeMenu[] = [
   { href: '/usuarios', rotulo: 'Usuários', Icone: IconeUsuarios },
   { href: '/departamentos', rotulo: 'Departamentos', Icone: IconeDepartamentos },
+  // Por último de propósito: é a tela que menos se abre no dia a dia — só ao
+  // instalar o Coredja em outro lugar, ou quando algo parou de funcionar.
+  { href: '/configuracoes', rotulo: 'Configurações', Icone: IconeConfiguracoes },
 ];
 
 interface MenuLateralProps {

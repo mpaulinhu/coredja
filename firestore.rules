@@ -105,6 +105,28 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Configurações da instalação (endereço e TOKEN do Holyrics) — ver
+    // `src/lib/configuracoes.ts`.
+    //
+    // FECHADA DOS DOIS LADOS, e este é o único lugar do Coredja onde a
+    // negação de LEITURA importa de fato. Todas as coleções acima têm leitura
+    // aberta porque o navegador precisa escutá-las em tempo real e o conteúdo
+    // não é sensível. Aqui é o oposto: o documento guarda o token do Holyrics,
+    // e leitura aberta o entregaria a qualquer pessoa que soubesse o id do
+    // projeto — sem precisar de login nenhum.
+    //
+    // Nenhuma tela lê esta coleção direto: a de Configurações pergunta ao
+    // servidor, que confere o papel de admin e devolve o token MASCARADO
+    // (ver `mascarar`). O valor real nunca sai do servidor.
+    //
+    // O catch-all abaixo já negaria os dois por omissão. O bloco existe
+    // explícito porque "esta coleção é fechada de propósito, e por quê" é
+    // diferente de "esta coleção ainda não foi pensada" — e a diferença
+    // importa no dia em que alguém for abrir uma exceção aqui.
+    match /configuracoes/{documento} {
+      allow read, write: if false;
+    }
+
     // Qualquer outra coleção fica fechada por padrão. Sem este bloco, uma
     // coleção nova criada no futuro herdaria o comportamento errado.
     match /{documento=**} {

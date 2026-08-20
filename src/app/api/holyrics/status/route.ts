@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   }
 
   return Response.json({
-    configurado: holyricsConfigurado(),
+    configurado: await holyricsConfigurado(),
     motivoImagem: MOTIVO_IMAGEM_NAO_SUPORTADA,
   });
 }

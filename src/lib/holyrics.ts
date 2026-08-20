@@ -29,6 +29,8 @@
  * isso a resposta é `unauthorized action` com HTTP 401.
  */
 
+import { lerConfiguracoesGravadas, resolver } from './configuracoes';
+
 /** Quanto esperar antes de desistir. Curto: no domingo ninguém espera. */
 const TEMPO_LIMITE_MS = 5000;
 
@@ -46,21 +48,31 @@ export type ResultadoHolyrics =
   | { estado: 'falhou'; motivo: string };
 
 /**
- * Lê a configuração das variáveis de ambiente. Ausente = integração inerte.
+ * Lê a configuração, com o que foi salvo na tela de Configurações ganhando do
+ * `.env.local` — ver `resolver` em `configuracoes.ts`. Ausente nos dois =
+ * integração inerte.
  *
  * `HOLYRICS_URL`   → ex.: http://192.168.0.10:8091
  * `HOLYRICS_TOKEN` → token gerado no Holyrics
+ *
+ * Virou assíncrona quando a configuração passou a poder vir do banco. O custo
+ * é baixo porque `lerConfiguracoesGravadas` guarda o valor em memória por um
+ * minuto — no domingo, avançar dez blocos não vira dez leituras no Firestore.
  */
-export function configHolyrics(): ConfigHolyrics | null {
-  const url = (process.env.HOLYRICS_URL ?? '').trim().replace(/\/+$/, '');
-  const token = (process.env.HOLYRICS_TOKEN ?? '').trim();
+export async function configHolyrics(): Promise<ConfigHolyrics | null> {
+  const gravado = await lerConfiguracoesGravadas();
+
+  const url = resolver(gravado.holyricsUrl, process.env.HOLYRICS_URL)
+    .valor.replace(/\/+$/, '');
+  const token = resolver(gravado.holyricsToken, process.env.HOLYRICS_TOKEN).valor;
+
   if (!url || !token) return null;
   return { url, token };
 }
 
 /** Se a integração está ligada — usado pela tela para explicar o que acontece. */
-export function holyricsConfigurado(): boolean {
-  return configHolyrics() !== null;
+export async function holyricsConfigurado(): Promise<boolean> {
+  return (await configHolyrics()) !== null;
 }
 
 /**
@@ -103,7 +115,7 @@ export async function enviarAvisoAoHolyrics(aviso: {
   texto: string;
   imagem?: unknown;
 }): Promise<ResultadoHolyrics> {
-  const config = configHolyrics();
+  const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
   if (!podeEnviarAoHolyrics(aviso)) {
@@ -152,7 +164,7 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
   texto: string;
   imagem?: unknown;
 }): Promise<ResultadoHolyrics> {
-  const config = configHolyrics();
+  const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
   if (!podeEnviarAoHolyrics(aviso)) {
@@ -181,7 +193,7 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
 
 /** Tira o aviso do telão do Holyrics. Mesmo contrato de `enviarAviso`. */
 export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
-  const config = configHolyrics();
+  const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
   try {
@@ -267,7 +279,7 @@ function mensagemDoErro(erro: unknown): string {
 export async function iniciarCronometroNoHolyrics(
   minutos: number,
 ): Promise<ResultadoHolyrics> {
-  const config = configHolyrics();
+  const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
   try {
@@ -279,7 +291,7 @@ export async function iniciarCronometroNoHolyrics(
 
 /** Desliga o cronômetro do painel. Mesmo contrato das outras. */
 export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
-  const config = configHolyrics();
+  const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
   try {
@@ -309,7 +321,7 @@ export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
 export async function somarTempoAoCronometroNoHolyrics(
   minutosExtras: number,
 ): Promise<ResultadoHolyrics> {
-  const config = configHolyrics();
+  const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
   const extras = Math.round(minutosExtras * 60);
@@ -338,7 +350,7 @@ export async function somarTempoAoCronometroNoHolyrics(
 export async function definirCronometroNoHolyrics(
   segundos: number,
 ): Promise<ResultadoHolyrics> {
-  const config = configHolyrics();
+  const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
   try {
@@ -433,4 +445,99 @@ export function holyricsParaTela(
   if (resultado.estado === 'nao-configurado') return null;
   if (resultado.estado === 'enviado') return { estado: 'enviado' };
   return { estado: resultado.estado, motivo: resultado.motivo };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * TESTE DE CONEXÃO — usado pela tela de Configurações
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** O que o teste descobriu. Cada caso pede uma ação diferente de quem lê. */
+export type DiagnosticoHolyrics =
+  | { estado: 'nao-configurado' }
+  /** Falou, respondeu, token aceito. */
+  | { estado: 'ok'; painelNoAr: boolean }
+  /** Chegou no Holyrics, mas ele recusou o token ou a permissão da ação. */
+  | { estado: 'recusado'; motivo: string }
+  /** Não chegou: Holyrics fechado, IP/porta errados, ou fora da rede. */
+  | { estado: 'inalcancavel'; motivo: string };
+
+/**
+ * Bate no Holyrics de verdade e diz o que voltou.
+ *
+ * Usa `GetCommunicationPanelInfo` como sonda por ser a única chamada de
+ * LEITURA da integração: testar com um envio acenderia texto no telão da
+ * igreja no meio do culto só para conferir a configuração.
+ *
+ * A diferença entre "não chegou" e "chegou e recusou" é o ponto do
+ * diagnóstico: são problemas opostos (rede/endereço × token/permissão) e
+ * quem lê precisa saber onde mexer. Um "falhou" genérico manda a pessoa
+ * conferir as duas coisas às cegas.
+ *
+ * ATENÇÃO à permissão: se `GetCommunicationPanelInfo` não estiver liberada em
+ * "gerenciar permissões", o teste acusa recusa mesmo com o token certo — por
+ * isso o texto do motivo cita a ação pelo nome, e a tela lista as permissões
+ * necessárias logo ao lado.
+ */
+export async function testarConexaoHolyrics(): Promise<DiagnosticoHolyrics> {
+  const config = await configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  const endereco = `${config.url}/api/GetCommunicationPanelInfo?token=${encodeURIComponent(config.token)}`;
+
+  let resposta: Response;
+  try {
+    resposta = await fetch(endereco, {
+      method: 'GET',
+      signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
+      cache: 'no-store',
+    });
+  } catch (erro) {
+    // Timeout, DNS, conexão recusada: nada disso chegou ao Holyrics.
+    return {
+      estado: 'inalcancavel',
+      motivo:
+        erro instanceof DOMException && erro.name === 'TimeoutError'
+          ? `O Holyrics não respondeu em ${TEMPO_LIMITE_MS / 1000} segundos. Ele está aberto, com o API Server ligado, e o servidor do Coredja está na mesma rede?`
+          : `Não foi possível alcançar ${config.url}. Confira o IP e a porta, e se o Holyrics está aberto.`,
+    };
+  }
+
+  // 401 é a resposta do Holyrics a token inválido ou ação não liberada — os
+  // dois casos são de configuração dentro do programa, não de rede.
+  if (resposta.status === 401) {
+    return {
+      estado: 'recusado',
+      motivo:
+        'O Holyrics recusou o token. Confira se ele foi copiado inteiro e se a ação "GetCommunicationPanelInfo" está liberada em gerenciar permissões.',
+    };
+  }
+
+  if (!resposta.ok) {
+    return {
+      estado: 'recusado',
+      motivo: `O Holyrics respondeu ${resposta.status}. Confira o endereço — talvez a porta aponte para outro programa.`,
+    };
+  }
+
+  // Chegou com 200, mas o Holyrics devolve erro de aplicação também em 200
+  // (ver `chamar`), então o corpo é quem decide.
+  const dados = (await resposta.json().catch(() => null)) as {
+    status?: string;
+    error?: string;
+    data?: InfoPainelHolyrics;
+  } | null;
+
+  if (!dados) {
+    return {
+      estado: 'recusado',
+      motivo:
+        'Veio uma resposta que não é do Holyrics. Confira se a porta configurada é a do API Server, e não a de outro programa.',
+    };
+  }
+
+  if (dados.status !== 'ok') {
+    return { estado: 'recusado', motivo: dados.error ?? 'O Holyrics recusou a consulta.' };
+  }
+
+  return { estado: 'ok', painelNoAr: dados.data?.countdown_show === true };
 }

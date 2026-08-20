@@ -91,6 +91,24 @@ export function IconeAoVivo({ className }: Props) {
 }
 
 /** Três traços — abre o menu no celular. */
+/**
+ * Engrenagem — Configurações.
+ *
+ * Aro externo contínuo com o eixo no centro, em vez de traços radiais saindo
+ * de um círculo: a primeira tentativa desenhava oito riscos em volta de um
+ * miolo e, no tamanho de 20px do menu, lia como SOL — bem ao lado de um
+ * botão de tema que é literalmente um sol. O contorno fechado não tem essa
+ * ambiguidade.
+ */
+export function IconeConfiguracoes({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="3.1" />
+      <path d="M19.2 14.6a1.6 1.6 0 0 0 .32 1.76l.06.06a1.9 1.9 0 1 1-2.7 2.7l-.05-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.46v.17a1.9 1.9 0 1 1-3.8 0v-.09a1.6 1.6 0 0 0-1.04-1.46 1.6 1.6 0 0 0-1.76.32l-.06.06a1.9 1.9 0 1 1-2.7-2.7l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.46-.98h-.17a1.9 1.9 0 0 1 0-3.8h.09a1.6 1.6 0 0 0 1.46-1.04 1.6 1.6 0 0 0-.32-1.76l-.06-.06a1.9 1.9 0 1 1 2.7-2.7l.06.06a1.6 1.6 0 0 0 1.76.32h.08a1.6 1.6 0 0 0 .97-1.46v-.17a1.9 1.9 0 1 1 3.8 0v.09a1.6 1.6 0 0 0 .97 1.46 1.6 1.6 0 0 0 1.77-.32l.05-.06a1.9 1.9 0 1 1 2.7 2.7l-.06.06a1.6 1.6 0 0 0-.32 1.76v.08a1.6 1.6 0 0 0 1.46.97h.17a1.9 1.9 0 0 1 0 3.8h-.09a1.6 1.6 0 0 0-1.46.97Z" />
+    </svg>
+  );
+}
+
 export function IconeMenuHamburguer({ className }: Props) {
   return (
     <svg {...comum} className={className} aria-hidden="true">
