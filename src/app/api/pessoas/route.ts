@@ -17,10 +17,12 @@ const PAPEIS_VALIDOS: Papel[] = ['admin', 'lider', 'coordenador', 'operador'];
  * mas aqui só repassamos slug/nome/cor: o token nunca deve chegar ao
  * navegador de uma pessoa, só ao link secreto de cada área.
  *
- * `departamentos` reaproveita o padrão que já devolvia `{ pessoas, areas }`
- * — a tela de Departamentos (Etapa 4, fora do escopo desta mudança) ainda
- * não tem rota própria, e criar `GET /api/departamentos` só para isso seria
- * mais uma rota para uma chamada que esta já faz de qualquer forma.
+ * `departamentos` continua vindo aqui mesmo depois de `GET
+ * /api/departamentos` passar a existir: a tela de Usuários precisa das três
+ * listas ao mesmo tempo para montar os seletores, e buscá-las em duas
+ * requisições só acrescentaria um segundo estado de carregamento sem que
+ * nada na tela ganhasse com isso. Quem quer só os departamentos (a tela de
+ * Departamentos, e o menu lateral) usa a rota dedicada.
  */
 export async function GET(request: Request) {
   const pessoa = await pessoaDaRequisicao(request);

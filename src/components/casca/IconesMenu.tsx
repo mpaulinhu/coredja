@@ -59,3 +59,36 @@ export function IconeUsuarios({ className }: Props) {
     </svg>
   );
 }
+
+/** Quatro blocos numa grade — "os setores", cada um seu quadrante. */
+export function IconeDepartamentos({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.6" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.6" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.6" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.6" />
+    </svg>
+  );
+}
+
+/** Três traços — abre o menu no celular. */
+export function IconeMenuHamburguer({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </svg>
+  );
+}
+
+/** X — fecha a gaveta do menu no celular. */
+export function IconeFechar({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <path d="M5 5l14 14" />
+      <path d="M19 5L5 19" />
+    </svg>
+  );
+}
