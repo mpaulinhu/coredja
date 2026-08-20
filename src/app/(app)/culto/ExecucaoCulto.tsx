@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Recado } from '@/components/Recado';
+import { SeloDoTelao, useEstadoDoTelao } from '@/components/EstadoDoTelao';
 import {
   BotaoDiscreto,
   BotaoPrincipal,
@@ -107,6 +108,12 @@ export function ExecucaoCulto({
   onEditar,
   onVoltar,
 }: Props) {
+
+  // O cronômetro do bloco vai para o painel de comunicação do Holyrics. Se o
+  // telão não estiver alcançável, quem opera precisa saber ANTES de contar
+  // com ele — no domingo não há tempo de investigar por que o palco não vê
+  // o tempo correr.
+  const telao = useEstadoDoTelao();
   const [ocupado, setOcupado] = useState(false);
   const [recado, setRecado] = useState<string | null>(null);
   /** Cronômetro em modo de digitação. Ver `CronometroEditavel`. */
@@ -256,6 +263,7 @@ export function ExecucaoCulto({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <SeloDoTelao estado={telao.estado} carregando={telao.carregando} />
             {selo && <Selo tom={selo.tom}>{selo.texto}</Selo>}
             {comecou && !encerrado && (
               <BotaoDiscreto

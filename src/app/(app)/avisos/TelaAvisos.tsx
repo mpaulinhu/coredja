@@ -9,6 +9,7 @@ import { hojeLocal } from '@/lib/culto';
 import { getFirestoreCliente } from '@/lib/firebase-cliente';
 import { TAMANHO_MAXIMO_BYTES } from '@/lib/limites';
 import { BotaoPrincipal, BotaoSecundario, Numero, Rotulo, Selo } from '@/components/Interface';
+import { SeloDoTelao, useEstadoDoTelao } from '@/components/EstadoDoTelao';
 import { CabecalhoDaPrevia, PreviaDoTelao, type ConteudoDaPrevia } from '@/components/PreviaDoTelao';
 
 /** Resposta da publicação, na parte que conta o que houve com o Holyrics. */
@@ -183,7 +184,11 @@ export function TelaAvisos() {
   const [avisos, setAvisos] = useState<Aviso[] | undefined>(undefined);
   const [erro, setErro] = useState<string | null>(null);
   const [recado, setRecado] = useState<string | null>(null);
-  const [holyricsLigado, setHolyricsLigado] = useState(false);
+  // `configurado` (alguém preencheu endereço e token) continua sendo o que
+  // decide se os botões de projetar APARECEM; `estado` (o telão responde
+  // agora?) decide se eles ganham o aviso de desconectado ao lado.
+  const telao = useEstadoDoTelao();
+  const holyricsLigado = telao.configurado;
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [mostrarPassados, setMostrarPassados] = useState(false);
@@ -209,23 +214,6 @@ export function TelaAvisos() {
       const lista = snap.docs.map((d) => normalizarAviso({ id: d.id, ...d.data() }));
       setAvisos(ordenarParaPublicar(lista, hojeLocal()));
     });
-  }, []);
-
-  useEffect(() => {
-    let vivo = true;
-    (async () => {
-      const cabecalho = await cabecalhoDeAutorizacao();
-      if (!cabecalho || !vivo) return;
-      const resp = await fetch('/api/holyrics/status', { headers: cabecalho });
-      if (!resp.ok || !vivo) return;
-      const dados = (await resp.json()) as { configurado?: boolean };
-      if (vivo) setHolyricsLigado(dados.configurado === true);
-    })().catch(() => {
-      // Integração é opcional: não saber se está ligada não quebra a tela.
-    });
-    return () => {
-      vivo = false;
-    };
   }, []);
 
   const chamar = useCallback(async (caminho: string, metodo: string, corpo?: FormData) => {
@@ -406,9 +394,11 @@ export function TelaAvisos() {
             style={{
               background: noAr
                 ? 'var(--acento)'
-                : holyricsLigado
+                : telao.estado === 'conectado'
                   ? 'var(--sucesso)'
-                  : 'var(--texto-fraco)',
+                  : telao.estado === 'desconectado'
+                    ? 'var(--alerta)'
+                    : 'var(--texto-fraco)',
             }}
           />
           <span
@@ -417,11 +407,18 @@ export function TelaAvisos() {
               color: noAr ? 'var(--acento-texto-sobre-fundo)' : 'var(--texto-suave)',
             }}
           >
+            {/* "conectado" precisa significar conectado. Este selo lia
+                `holyricsLigado` (= alguém preencheu endereço e token) e
+                anunciava "Holyrics conectado" mesmo com o Holyrics fechado —
+                aparecendo verde bem acima do aviso de telão desconectado, na
+                mesma tela. Agora ele lê o estado real. */}
             {noAr
               ? 'Aviso no telão agora'
-              : holyricsLigado
+              : telao.estado === 'conectado'
                 ? 'Holyrics conectado'
-                : 'Telão livre'}
+                : telao.estado === 'desconectado'
+                  ? 'Holyrics não responde'
+                  : 'Telão livre'}
           </span>
         </div>
       </header>
@@ -469,6 +466,14 @@ export function TelaAvisos() {
                   Avisar audiovisual
                 </BotaoSecundario>
               )}
+
+              {/* Logo abaixo dos botões que dependem do Holyrics, e não no
+                  topo da tela: o aviso precisa estar onde a pessoa vai
+                  clicar. Só aparece quando está configurado E fora do ar —
+                  ver `SeloDoTelao`. */}
+              <div className="w-full">
+                <SeloDoTelao estado={telao.estado} carregando={telao.carregando} />
+              </div>
             </div>
           )}
 
