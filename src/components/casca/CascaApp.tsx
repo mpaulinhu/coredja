@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { IconeMenuHamburguer } from './IconesMenu';
 import { MenuLateral } from './MenuLateral';
@@ -17,9 +18,25 @@ import { MenuLateral } from './MenuLateral';
  * padrão. De `md` para cima: a barra mobile some (o cabeçalho "Coredja" já
  * está dentro do próprio `MenuLateral`, sempre visível) e o menu volta a ser
  * coluna fixa — comportamento de antes, sem gaveta.
+ *
+ * `ROTAS_SEM_MENU` são as telas que trazem a própria navegação e por isso
+ * dispensam esta moldura inteira — hoje só os Recados, cuja tela de
+ * referência usa a barra da esquerda para a LISTA DE CONVERSAS, no lugar
+ * exato onde o menu ficaria (ver `PainelAudiovisual.tsx`). Elas voltam para o
+ * resto do app por um link próprio no topo, como a Execução do Culto faz com
+ * "← Todas as ordens".
  */
+
+/** Telas com navegação própria — ver nota acima. */
+const ROTAS_SEM_MENU = ['/painel'];
+
 export function CascaApp({ children }: { children: ReactNode }) {
   const [menuAberto, setMenuAberto] = useState(false);
+  const caminho = usePathname();
+
+  if (ROTAS_SEM_MENU.some((rota) => caminho?.startsWith(rota))) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex h-full flex-col md:flex-row">

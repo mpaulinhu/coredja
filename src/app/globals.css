@@ -167,6 +167,13 @@ html {
   /* Evita o zoom automático do iOS ao focar um campo de texto, que
      desalinharia a tela de envio no celular da Cantina. */
   -webkit-text-size-adjust: 100%;
+  /* Dá base real para o `h-full` das cascas (`ExigeLogin`, `CascaApp`): sem
+     altura no html/body ele resolve para `auto`, e uma tela que quer ocupar
+     "o que sobrou da janela" — como a de Recados, com lista e conversa
+     rolando por conta própria — não tem de que descontar a barra de conta.
+     `dvh` e não `vh` por causa da barra do navegador no celular, que muda de
+     altura ao rolar. */
+  height: 100dvh;
 }
 
 body {
@@ -174,6 +181,13 @@ body {
   color: var(--texto);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* `height` + `overflow:hidden` juntos: sem o overflow, uma tela que ocupa
+     `h-full` mais qualquer barra acima dela (a de conta, no `ExigeLogin`)
+     soma mais que a janela e faz o documento inteiro rolar por fora —
+     empurrando o rodapé do composer para fora do campo de visão. Quem rola
+     aqui é sempre um painel interno, nunca o documento. */
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Foco sempre visível: parte do uso é por teclado, no PC do audiovisual. */

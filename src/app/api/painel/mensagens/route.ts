@@ -1,10 +1,11 @@
 import { conversaTemUrgencia, montarConversas } from '@/lib/conversas';
 import { publicar } from '@/lib/eventos';
-import { TAMANHO_MAXIMO_TEXTO } from '@/lib/limites';
+import { MAXIMO_ANEXOS, TAMANHO_MAXIMO_TEXTO } from '@/lib/limites';
 import { podeConversarCom } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 import { store } from '@/lib/store';
-import type { Prioridade } from '@/lib/types';
+import { ErroDeUpload, salvarImagem } from '@/lib/uploads';
+import type { Anexo, Prioridade } from '@/lib/types';
 
 /**
  * Dados do painel e envio de mensagens entre departamentos.
@@ -51,15 +52,42 @@ export async function POST(request: Request) {
     );
   }
 
-  let corpo: { conversaId?: unknown; texto?: unknown; prioridade?: unknown };
-  try {
-    corpo = await request.json();
-  } catch {
-    return Response.json({ erro: 'Envio inválido.' }, { status: 400 });
-  }
+  // Aceita os dois formatos: JSON (recado só de texto) e multipart (recado
+  // com imagem). O painel manda multipart quando há anexo — mesmo caminho de
+  // `salvarImagem` que o link de área já usa.
+  const ehFormulario = (request.headers.get('content-type') ?? '').includes(
+    'multipart/form-data',
+  );
 
-  const conversaId = String(corpo.conversaId ?? '');
-  const texto = String(corpo.texto ?? '').trim();
+  let conversaId: string;
+  let texto: string;
+  let prioridadePedida: unknown;
+  let arquivos: File[] = [];
+
+  if (ehFormulario) {
+    let form: FormData;
+    try {
+      form = await request.formData();
+    } catch {
+      return Response.json({ erro: 'Envio inválido.' }, { status: 400 });
+    }
+    conversaId = String(form.get('conversaId') ?? '');
+    texto = String(form.get('texto') ?? '').trim();
+    prioridadePedida = form.get('prioridade');
+    arquivos = form
+      .getAll('imagens')
+      .filter((v): v is File => v instanceof File && v.size > 0);
+  } else {
+    let corpo: { conversaId?: unknown; texto?: unknown; prioridade?: unknown };
+    try {
+      corpo = await request.json();
+    } catch {
+      return Response.json({ erro: 'Envio inválido.' }, { status: 400 });
+    }
+    conversaId = String(corpo.conversaId ?? '');
+    texto = String(corpo.texto ?? '').trim();
+    prioridadePedida = corpo.prioridade;
+  }
 
   const [deptoA, deptoB] = conversaId.split('__');
   if (!deptoA || !deptoB) {
@@ -87,12 +115,16 @@ export async function POST(request: Request) {
   // que "normal" é sempre um valor válido e o pior caso de aceitar é a
   // mensagem perder um destaque que não faria sentido ali de qualquer forma.
   const prioridade: Prioridade | null =
-    corpo.prioridade === 'urgente' && conversaTemUrgencia(deptoA, deptoB)
+    prioridadePedida === 'urgente' && conversaTemUrgencia(deptoA, deptoB)
       ? 'urgente'
       : null;
 
-  if (!texto) {
-    return Response.json({ erro: 'Escreva a mensagem.' }, { status: 400 });
+  // Um recado precisa dizer alguma coisa: texto, imagem, ou os dois.
+  if (!texto && arquivos.length === 0) {
+    return Response.json(
+      { erro: 'Escreva a mensagem ou anexe uma imagem.' },
+      { status: 400 },
+    );
   }
 
   if (texto.length > TAMANHO_MAXIMO_TEXTO) {
@@ -102,12 +134,34 @@ export async function POST(request: Request) {
     );
   }
 
+  if (arquivos.length > MAXIMO_ANEXOS) {
+    return Response.json(
+      { erro: `Envie no máximo ${MAXIMO_ANEXOS} imagens por recado.` },
+      { status: 400 },
+    );
+  }
+
+  const anexos: Omit<Anexo, 'id'>[] = [];
+  for (const arquivo of arquivos) {
+    try {
+      anexos.push(await salvarImagem(arquivo));
+    } catch (erro) {
+      if (erro instanceof ErroDeUpload) {
+        return Response.json({ erro: erro.message }, { status: 400 });
+      }
+      throw erro;
+    }
+  }
+
   const mensagem = await store.criarMensagem({
     conversaId,
     remetente: pessoa.departamento,
+    // Quem escreveu, para o painel exibir "Departamento · Pessoa". Vem da
+    // sessão, nunca do corpo da requisição: assinatura não se declara.
+    autor: pessoa.nome,
     texto,
     prioridade,
-    anexos: [],
+    anexos,
   });
 
   publicar('mensagem-nova', conversaId);

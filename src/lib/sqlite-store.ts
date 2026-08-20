@@ -30,6 +30,7 @@ interface LinhaMensagem {
   depto_a: string;
   depto_b: string;
   remetente: string;
+  autor: string | null;
   texto: string;
   prioridade: string | null;
   criada_em: string;
@@ -93,6 +94,8 @@ function montarMensagens(linhas: LinhaMensagem[]): Mensagem[] {
     id: linha.id,
     conversaId: linha.conversa_id,
     remetente: linha.remetente,
+    // `?? undefined` porque o banco guarda NULL e o tipo usa opcional.
+    autor: linha.autor ?? undefined,
     texto: linha.texto,
     prioridade: linha.prioridade as Mensagem['prioridade'],
     criadaEm: linha.criada_em,
@@ -174,8 +177,8 @@ export const sqliteStore: Store = {
 
     const inserirMensagem = db.prepare(`
       INSERT INTO mensagens
-        (id, conversa_id, depto_a, depto_b, remetente, texto, prioridade, criada_em, resolvida_em)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        (id, conversa_id, depto_a, depto_b, remetente, autor, texto, prioridade, criada_em, resolvida_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
     `);
     const inserirAnexo = db.prepare(`
       INSERT INTO anexos
@@ -192,6 +195,7 @@ export const sqliteStore: Store = {
         deptoA,
         deptoB,
         dados.remetente,
+        dados.autor ?? null,
         dados.texto,
         dados.prioridade,
         criadaEm,

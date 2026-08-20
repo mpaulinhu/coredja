@@ -58,6 +58,16 @@ export interface Mensagem {
   conversaId: string;
   /** Slug do departamento que escreveu este recado. */
   remetente: string;
+  /**
+   * Nome de quem escreveu, dentro do departamento — o painel exibe
+   * "Departamento · Pessoa".
+   *
+   * Opcional porque recado gravado antes deste campo existir não tem como
+   * saber quem foi: ali o painel mostra só o departamento, sem migração
+   * nenhuma. Também fica ausente no recado que chega pelo link de área, que
+   * não tem pessoa logada por trás.
+   */
+  autor?: string;
   texto: string;
   prioridade: Prioridade | null;
   /** ISO 8601 em UTC. A tela converte para o horário local ao exibir. */
@@ -71,6 +81,8 @@ export interface Mensagem {
 export interface NovaMensagem {
   conversaId: string;
   remetente: string;
+  /** Nome de quem escreveu — ver `autor` em `Mensagem`. */
+  autor?: string;
   texto: string;
   prioridade: Prioridade | null;
   anexos: Omit<Anexo, 'id'>[];

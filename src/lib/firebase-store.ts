@@ -49,6 +49,8 @@ const DEPARTAMENTOS_INICIAIS: Departamento[] = [
 interface DocMensagem {
   conversaId: string;
   remetente: string;
+  /** Ausente em recado gravado antes do campo existir — ver `Mensagem.autor`. */
+  autor?: string;
   texto: string;
   prioridade: Mensagem['prioridade'];
   criadaEm: string;
@@ -108,6 +110,7 @@ function paraMensagem(
     id,
     conversaId: doc.conversaId,
     remetente: doc.remetente,
+    autor: doc.autor,
     texto: doc.texto,
     prioridade: doc.prioridade ?? null,
     criadaEm: doc.criadaEm,
@@ -162,6 +165,8 @@ export const firebaseStore: Store = {
     const doc: DocMensagem = {
       conversaId: dados.conversaId,
       remetente: dados.remetente,
+      // Só entra no documento quando existe: o Firestore recusa `undefined`.
+      ...(dados.autor ? { autor: dados.autor } : {}),
       texto: dados.texto,
       prioridade: dados.prioridade,
       criadaEm,

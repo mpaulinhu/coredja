@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS mensagens (
   depto_a      TEXT NOT NULL,
   depto_b      TEXT NOT NULL,
   remetente    TEXT NOT NULL,
+  autor        TEXT,
   texto        TEXT NOT NULL,
   prioridade   TEXT CHECK (prioridade IN ('normal', 'urgente')),
   criada_em    TEXT NOT NULL,
@@ -167,6 +168,29 @@ function migrarSchemaAntigo(db: Database.Database): void {
   migrar();
 }
 
+/**
+ * Acrescenta `mensagens.autor` (nome de quem escreveu, para o painel exibir
+ * "Departamento · Pessoa") em bancos criados antes do campo existir.
+ *
+ * `CREATE TABLE IF NOT EXISTS` não altera tabela já existente, então o
+ * `SCHEMA` acima só cobre instalação nova — daí este ALTER condicional. A
+ * coluna é anulável de propósito: recado antigo não tem como saber quem
+ * escreveu, e fica só com o departamento (ver `Mensagem.autor`).
+ */
+function migrarColunaAutor(db: Database.Database): void {
+  const temTabela = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mensagens'`)
+    .get();
+  if (!temTabela) return; // instalação nova: o SCHEMA já cria com a coluna
+
+  const temColuna = (
+    db.prepare(`PRAGMA table_info(mensagens)`).all() as { name: string }[]
+  ).some((coluna) => coluna.name === 'autor');
+  if (temColuna) return;
+
+  db.exec(`ALTER TABLE mensagens ADD COLUMN autor TEXT`);
+}
+
 let instancia: Database.Database | null = null;
 
 /**
@@ -200,6 +224,7 @@ export function getDb(): Database.Database {
   // existente, então se o schema rodasse primeiro numa instalação antiga a
   // migração acharia a tabela nova vazia em vez da antiga com dados.
   migrarSchemaAntigo(db);
+  migrarColunaAutor(db);
   db.exec(SCHEMA);
 
   instancia = db;
