@@ -124,18 +124,34 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
         />
       )}
 
+      {/*
+        Visual vindo da tela de referência dos Avisos do Telão (20/08/2026,
+        "a lateral de navegação pode pegar igual também, gostei"): coluna mais
+        larga (272px), itens mais altos e mais arredondados, e o item ativo
+        marcado por uma FAIXA de acento colada na borda esquerda
+        (`box-shadow: inset`) em vez de só um fundo esmaecido. A faixa é o que
+        faz o item ativo se ler de relance no escuro, que é a condição real de
+        uso no domingo.
+
+        `overflow-y-auto` no `<nav>`: com a caixa "EQUIPE DE HOJE" no rodapé,
+        num celular deitado o conteúdo pode passar da altura da janela — sem
+        isso o rodapé fica inalcançável.
+      */}
       <nav
         aria-label="Menu principal"
-        className={`fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[85vw] shrink-0 flex-col border-r border-borda bg-fundo-elevado transition-transform duration-200 ease-out md:static md:z-auto md:w-64 md:max-w-none md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[272px] max-w-[85vw] shrink-0 flex-col overflow-y-auto border-r border-borda bg-fundo-elevado transition-transform duration-200 ease-out md:static md:z-auto md:max-w-none md:translate-x-0 ${
           aberto ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-start justify-between px-5 py-6">
-          <div>
-            <Link href="/" className="text-lg font-bold tracking-tight text-texto">
+        <div className="flex items-start justify-between gap-2 px-6 py-6">
+          <div className="min-w-0">
+            <Link
+              href="/"
+              className="text-[22px] font-extrabold tracking-[-0.02em] text-texto"
+            >
               Coredja
             </Link>
-            <p className="mt-0.5 text-xs text-texto-fraco">
+            <p className="mt-1 text-[13px] text-texto-fraco">
               Comunicação interna da igreja
             </p>
           </div>
@@ -147,13 +163,13 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
             type="button"
             aria-label="Fechar menu"
             onClick={aoFechar}
-            className="rounded-lg p-1.5 text-texto-suave hover:bg-fundo-cartao hover:text-texto md:hidden"
+            className="-mr-1.5 shrink-0 cursor-pointer rounded-lg p-2 text-texto-suave hover:bg-fundo-cartao hover:text-texto md:hidden"
           >
             <IconeFechar />
           </button>
         </div>
 
-        <ul className="flex flex-col gap-1 px-3">
+        <ul className="flex flex-col gap-1 px-4">
           {itens.map((item) => {
             const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
 
@@ -161,12 +177,12 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
               return (
                 <li key={item.href}>
                   <span
-                    className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-texto-fraco opacity-60"
+                    className="flex cursor-not-allowed items-center gap-3.5 rounded-xl px-4 py-3.5 text-[15px] text-texto-fraco opacity-60"
                     title="Ainda não construída"
                   >
                     <item.Icone className="shrink-0" />
                     {item.rotulo}
-                    <span className="ml-auto text-[10px] uppercase tracking-wide text-texto-fraco">
+                    <span className="ml-auto text-[10px] tracking-wide text-texto-fraco uppercase">
                       em breve
                     </span>
                   </span>
@@ -179,11 +195,20 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
                 <Link
                   href={item.href}
                   aria-current={ativo ? 'page' : undefined}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3.5 rounded-xl px-4 py-3.5 text-[15px] transition-colors ${
                     ativo
-                      ? 'bg-acento/15 text-texto'
-                      : 'text-texto-suave hover:bg-fundo-cartao hover:text-texto'
+                      ? 'font-bold'
+                      : 'font-semibold text-texto-suave hover:bg-fundo-cartao hover:text-texto'
                   }`}
+                  style={
+                    ativo
+                      ? {
+                          background: 'var(--acento-suave-fundo)',
+                          color: 'var(--acento-texto-sobre-fundo)',
+                          boxShadow: 'inset 2px 0 0 var(--acento)',
+                        }
+                      : undefined
+                  }
                 >
                   <item.Icone className="shrink-0" />
                   {item.rotulo}
@@ -196,12 +221,15 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
         {/* Rodapé: quem está em cada função hoje, derivado dos responsáveis
             dos blocos da ordem ativa (ver `EquipeDeHoje`). Fica aqui, e não
             só na tela do culto, porque é a informação que alguém procura no
-            domingo estando em qualquer tela. */}
-        <div className="mt-auto flex flex-col gap-4 px-4 py-5">
+            domingo estando em qualquer tela.
+
+            `mt-auto` empurra para baixo; `pt-6` garante respiro mesmo quando
+            a lista de itens é curta e o rodapé sobe. */}
+        <div className="mt-auto flex flex-col gap-3.5 px-5 pt-6 pb-6">
           <EquipeDeHoje />
           <Link
             href="/"
-            className="px-1 text-xs text-texto-fraco hover:text-texto-suave"
+            className="px-2 text-[13px] text-texto-fraco transition-colors hover:text-acento-forte"
           >
             ← Voltar para a home
           </Link>

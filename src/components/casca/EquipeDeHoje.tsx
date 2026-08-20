@@ -75,8 +75,10 @@ export function EquipeDeHoje() {
   if (equipe.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-borda bg-fundo-cartao p-4">
-      <p className="text-[11px] font-extrabold tracking-[0.14em] text-texto-fraco uppercase">
+    // Mesma caixa da tela de referência (o bloco "AUDIOVISUAL" no rodapé da
+    // lateral): raio 14px, borda fina, rótulo espaçado em caixa alta.
+    <div className="rounded-[14px] border border-borda bg-fundo-cartao p-4">
+      <p className="text-[11px] font-bold tracking-[0.14em] text-texto-fraco uppercase">
         Equipe de hoje
       </p>
       <dl className="mt-3 flex flex-col gap-2 text-[13px]">
