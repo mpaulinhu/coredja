@@ -270,22 +270,8 @@ export async function iniciarCronometroNoHolyrics(
   const config = configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  const total = Math.max(0, Math.round(minutos * 60));
-
   try {
-    // O painel pode ter sobrado com texto de um teste ou de um aviso
-    // anterior. O pedido é "só o tempo" na tela, então limpamos o rótulo do
-    // cronômetro antes de ligá-lo. Falhar aqui não impede o cronômetro: é
-    // cosmético, e derrubar o principal por causa do acessório seria pior.
-    await chamar(config, 'SetCommunicationPanelSettings', {
-      countdown_text: '',
-    }).catch(() => undefined);
-
-    return await chamar(config, 'StartCountdownCommunicationPanel', {
-      minutes: Math.floor(total / 60),
-      seconds: total % 60,
-      stop_at_zero: false,
-    });
+    return await ligarCronometro(config, minutos * 60);
   } catch (erro) {
     return { estado: 'falhou', motivo: mensagemDoErro(erro) };
   }
@@ -304,7 +290,7 @@ export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
 }
 
 /**
- * Dá mais `minutosExtras` ao bloco em andamento.
+ * Soma `minutosExtras` ao bloco em andamento. Valor NEGATIVO tira tempo.
  *
  * A API não tem "somar tempo": só dá para iniciar um cronômetro do zero. Então
  * o caminho é ler quanto ainda falta (`GetCommunicationPanelInfo`) e reiniciar
@@ -314,6 +300,11 @@ export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
  * `stop_at_zero: false` deixa ele seguir contando). Somar em cima do valor
  * real é o que faz sentido: dar 5 minutos a um bloco que já passou 3 deixa
  * 2 minutos de fato, não 5.
+ *
+ * Verificado contra um Holyrics real em 20/08/2026: reenviar
+ * `StartCountdownCommunicationPanel` com um total MENOR encurta o cronômetro
+ * normalmente (10 min no ar, reenvio de 3 min, o painel passou a 178s). Tirar
+ * tempo é, portanto, o mesmo caminho de somar, com o sinal invertido.
  */
 export async function somarTempoAoCronometroNoHolyrics(
   minutosExtras: number,
@@ -329,20 +320,66 @@ export async function somarTempoAoCronometroNoHolyrics(
     // Sem cronômetro no ar (nunca ligou, ou pararam): "dar mais X minutos"
     // vira simplesmente ligar um de X minutos, que é o que quem clicou espera.
     const restante = info?.countdown_show ? (info.countdown_time ?? 0) : 0;
-    const total = Math.max(0, restante + extras);
 
-    await chamar(config, 'SetCommunicationPanelSettings', {
-      countdown_text: '',
-    }).catch(() => undefined);
-
-    return await chamar(config, 'StartCountdownCommunicationPanel', {
-      minutes: Math.floor(total / 60),
-      seconds: total % 60,
-      stop_at_zero: false,
-    });
+    return await ligarCronometro(config, restante + extras);
   } catch (erro) {
     return { estado: 'falhou', motivo: mensagemDoErro(erro) };
   }
+}
+
+/**
+ * Põe o cronômetro do painel exatamente em `segundos` restantes — o número
+ * digitado no cronômetro da tela.
+ *
+ * Diferente de `somarTempoAoCronometroNoHolyrics`, não lê o painel antes: o
+ * valor digitado É a verdade, e consultar o estado atual só acrescentaria uma
+ * chamada de rede cujo resultado seria descartado.
+ */
+export async function definirCronometroNoHolyrics(
+  segundos: number,
+): Promise<ResultadoHolyrics> {
+  const config = configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  try {
+    return await ligarCronometro(config, segundos);
+  } catch (erro) {
+    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+  }
+}
+
+/**
+ * Liga o countdown do painel em `segundos`, limpando o rótulo antes.
+ *
+ * Comum às três formas de mexer no cronômetro (ligar do zero, somar, definir)
+ * porque as três terminam na mesma chamada, com os mesmos dois cuidados:
+ *
+ * 1. **Rótulo residual.** O painel pode ter sobrado com texto de um teste ou
+ *    de um aviso anterior, e o pedido aqui é "só o tempo" na tela. Falhar a
+ *    limpeza não impede o cronômetro: é cosmético, e derrubar o principal por
+ *    causa do acessório seria pior.
+ * 2. **Piso em zero do que se ENVIA.** `segundos` pode chegar negativo (tirar
+ *    5 min de um bloco com 2 sobrando; digitar um tempo já estourado). A TELA
+ *    mostra esse negativo — é a informação de quanto o bloco passou. A API
+ *    não: `minutes`/`seconds` não têm sinal. Então liga-se em `00:00` e o
+ *    `stop_at_zero: false` leva o painel para o negativo por conta própria no
+ *    segundo seguinte, chegando ao mesmo lugar.
+ */
+async function ligarCronometro(
+  config: ConfigHolyrics,
+  segundos: number,
+): Promise<ResultadoHolyrics> {
+  const total = Math.max(0, Math.round(segundos));
+
+  await chamar(config, 'SetCommunicationPanelSettings', {
+    countdown_text: '',
+  }).catch(() => undefined);
+
+  return chamar(config, 'StartCountdownCommunicationPanel', {
+    minutes: Math.floor(total / 60),
+    seconds: total % 60,
+    stop_at_zero: false,
+  });
 }
 
 /** O que interessa do estado do painel. Campos ausentes = painel sem countdown. */

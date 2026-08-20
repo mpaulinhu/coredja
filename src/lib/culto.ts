@@ -113,8 +113,8 @@ export interface Culto {
    */
   segundosAcumulados?: number;
   /**
-   * Minutos extras dados ao bloco atual pelo "+1/+5 min", que NÃO reescrevem
-   * `bloco.minutos`.
+   * Minutos dados (ou tirados) do bloco atual pelos botões "-5/-1/+1/+5",
+   * que NÃO reescrevem `bloco.minutos`.
    *
    * A separação é a mesma que `api/culto/tempo-extra` já defendia: os
    * minutos do bloco são o PLANEJADO, montado na semana, e um ajuste de
@@ -122,6 +122,10 @@ export interface Culto {
    * também vive na tela do Coredja (não só no Holyrics), então o extra
    * precisa estar em algum lugar que a tela leia — e num lugar que zere
    * sozinho ao trocar de bloco, que é o que acontece aqui.
+   *
+   * Pode ser NEGATIVO: "o louvor precisa terminar 5 minutos antes" é um
+   * ajuste tão real quanto esticar. A duração resultante do bloco é que não
+   * desce abaixo de zero — ver `duracaoDoBlocoAtualEmSegundos`.
    */
   minutosExtras?: number;
   /** Quem montou por último, para a tela mostrar "editado por fulano". */
@@ -218,9 +222,18 @@ export interface StoreCulto {
   pausar(id: string, pausar: boolean): Promise<Culto | null>;
   /**
    * Soma minutos ao bloco em andamento SEM reescrever `bloco.minutos`.
-   * Ver `Culto.minutosExtras`.
+   * `minutos` negativo TIRA tempo. Ver `Culto.minutosExtras`.
    */
   darTempoExtra(id: string, minutos: number): Promise<Culto | null>;
+  /**
+   * Define quantos segundos AINDA FALTAM do bloco em andamento — o número
+   * digitado no cronômetro da tela.
+   *
+   * Não mexe em `minutosExtras` nem em `bloco.minutos`: o que muda é o
+   * RELÓGIO (quanto já correu), não o plano. Ver a implementação no store
+   * para o porquê de o ajuste cair em `segundosAcumulados`.
+   */
+  definirRestante(id: string, segundos: number): Promise<Culto | null>;
 
   listarModelos(): Promise<ModeloCulto[]>;
   salvarModelo(dados: NovoModelo, autor: string): Promise<ModeloCulto>;
@@ -306,13 +319,23 @@ export function indiceDoBlocoAtual(
   return culto.blocos.findIndex((b) => b.id === culto.blocoAtualId);
 }
 
-/** Duração do bloco atual em segundos, já somados os "+1/+5 min" dados a ele. */
+/**
+ * Duração do bloco atual em segundos, já contados os "-5/-1/+1/+5" dados a
+ * ele.
+ *
+ * `minutosExtras` pode ser negativo (tirar tempo), então a soma é feita sem
+ * descartar o sinal — mas a duração final tem piso em zero: um bloco de
+ * duração negativa faria a barra de progresso e o percentual do culto
+ * calcularem em cima de um denominador sem sentido. Tirar mais tempo do que
+ * o bloco tem significa "acabou agora", e o cronômetro segue para o negativo
+ * pelo caminho normal (`restanteDoBloco`).
+ */
 export function duracaoDoBlocoAtualEmSegundos(culto: Culto): number {
   const indice = indiceDoBlocoAtual(culto);
   if (indice === -1) return 0;
   const extras = Number(culto.minutosExtras);
-  const somados = Number.isFinite(extras) && extras > 0 ? extras : 0;
-  return (minutosDoBloco(culto.blocos[indice]) + somados) * 60;
+  const somados = Number.isFinite(extras) ? extras : 0;
+  return Math.max(0, (minutosDoBloco(culto.blocos[indice]) + somados) * 60);
 }
 
 /**
@@ -328,8 +351,12 @@ export function decorridoDoBlocoEmSegundos(
   culto: Culto,
   agora: Date = new Date(),
 ): number {
+  // O sinal do acumulado é preservado de propósito: digitar no cronômetro um
+  // restante MAIOR que a duração do bloco (bloco de 5 min, "faltam 10") só
+  // pode ser representado por um decorrido negativo. Descartar o negativo
+  // faria a tela ignorar exatamente esse ajuste.
   const acumulado = Number(culto.segundosAcumulados);
-  const base = Number.isFinite(acumulado) && acumulado > 0 ? acumulado : 0;
+  const base = Number.isFinite(acumulado) ? acumulado : 0;
 
   if (culto.pausadoEm) return base;
   if (!culto.blocoIniciadoEm) return base;
@@ -354,6 +381,43 @@ export function formatarCronometro(segundos: number): string {
   const s = Math.abs(Math.round(segundos));
   const minutos = String(Math.floor(s / 60)).padStart(2, '0');
   return `${minutos}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Lê o que a pessoa digitou no cronômetro e devolve SEGUNDOS, ou `null` se
+ * não dá para entender.
+ *
+ * Aceita de propósito quatro escritas para a mesma coisa, porque no domingo
+ * ninguém vai lembrar de um formato:
+ *
+ * - `"5"`      → 5 minutos (300s). Número solto é MINUTO, não segundo: quem
+ *                digita rápido está pensando "cinco minutos".
+ * - `"5:00"`   → 5 minutos
+ * - `"05:00"`  → 5 minutos
+ * - `"5:30"`   → 5 min e 30s
+ *
+ * Aceita também `.` e `,` no lugar de `:` (teclado numérico do celular não
+ * traz dois-pontos à mão) e espaços em volta. Recusa o que sobra: texto,
+ * negativo, segundos acima de 59 numa escrita `M:SS` (é engano — quem quis
+ * dizer 90 segundos escreve `1:30`).
+ *
+ * Devolve `null` para vazio: "apagou tudo e apertou Enter" é desistir, não é
+ * pedir zero.
+ */
+export function lerTempoDigitado(texto: string): number | null {
+  const limpo = texto.trim().replace(/[.,]/g, ':');
+  if (!limpo) return null;
+
+  const soMinutos = /^(\d{1,3})$/.exec(limpo);
+  if (soMinutos) return Number(soMinutos[1]) * 60;
+
+  const minutosESegundos = /^(\d{1,3}):(\d{1,2})$/.exec(limpo);
+  if (!minutosESegundos) return null;
+
+  const segundos = Number(minutosESegundos[2]);
+  if (segundos > 59) return null;
+
+  return Number(minutosESegundos[1]) * 60 + segundos;
 }
 
 /**

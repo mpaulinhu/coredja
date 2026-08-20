@@ -1,8 +1,10 @@
 import { getFirestoreDb } from './firebase';
 import {
+  duracaoDoBlocoAtualEmSegundos,
   hojeLocal,
   horaLocal,
   idDoCulto,
+  indiceDoBlocoAtual,
   statusDoCulto,
   type Bloco,
   type Culto,
@@ -234,10 +236,43 @@ export const cultoStore: StoreCulto = {
     if (!doc.exists) return null;
     const culto = { ...(doc.data() as Culto), id: doc.id };
 
+    // O acumulado pode já estar negativo (alguém tirou tempo antes), então
+    // a base preserva o sinal — descartá-lo faria o segundo "-5" partir do
+    // zero e desfazer o primeiro.
     const atuais = Number(culto.minutosExtras);
-    const base = Number.isFinite(atuais) && atuais > 0 ? atuais : 0;
+    const base = Number.isFinite(atuais) ? atuais : 0;
 
     const atualizado: Culto = { ...culto, minutosExtras: base + minutos };
+    await ref.set(atualizado);
+    return atualizado;
+  },
+
+  async definirRestante(id: string, segundos: number) {
+    const ref = colecao().doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) return null;
+    const culto = { ...(doc.data() as Culto), id: doc.id };
+
+    // Sem bloco em andamento não há relógio a acertar: gravar um acumulado
+    // aqui deixaria o número pendurado para o próximo bloco herdar.
+    if (indiceDoBlocoAtual(culto) === -1) return null;
+
+    // O restante é DERIVADO (duração - decorrido), então definir o restante
+    // é escolher o decorrido que produz esse número. A duração fica como
+    // está: os minutos do bloco são o planejado da semana, e digitar
+    // "faltam 5" no domingo não deve reescrever o roteiro.
+    const decorridoAlvo = duracaoDoBlocoAtualEmSegundos(culto) - Math.round(segundos);
+
+    // Com o culto pausado o decorrido é o acumulado puro; correndo, é o
+    // acumulado mais o tempo desde `blocoIniciadoEm`. Zerar o relógio de
+    // referência para agora e pôr tudo no acumulado dá o mesmo número nos
+    // dois estados — e mantém pausado o que estava pausado, porque
+    // `pausadoEm` não é tocado. Ver `decorridoDoBlocoEmSegundos`.
+    const atualizado: Culto = {
+      ...culto,
+      segundosAcumulados: decorridoAlvo,
+      blocoIniciadoEm: new Date().toISOString(),
+    };
     await ref.set(atualizado);
     return atualizado;
   },

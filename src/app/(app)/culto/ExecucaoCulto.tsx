@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Recado } from '@/components/Recado';
 import {
   BotaoDiscreto,
@@ -18,6 +18,7 @@ import {
   formatarCronometro,
   horariosDosBlocos,
   indiceDoBlocoAtual,
+  lerTempoDigitado,
   minutosDoBloco,
   percentualDoBloco,
   percentualDoCulto,
@@ -35,8 +36,19 @@ interface Props {
   onAvancar: () => Promise<string | null>;
   /** Põe o culto direto num bloco. Mesmo contrato de `onAvancar`. */
   onIrParaBloco: (blocoId: string) => Promise<string | null>;
-  /** Estica o cronômetro do bloco em andamento. Mesmo contrato de `onAvancar`. */
+  /**
+   * Estica o cronômetro do bloco em andamento — `minutos` negativo encurta.
+   * Mesmo contrato de `onAvancar`.
+   */
   onTempoExtra: (minutos: number) => Promise<string | null>;
+  /**
+   * Acerta quanto AINDA FALTA do bloco, em segundos — o tempo digitado no
+   * cronômetro. Mesmo contrato de `onAvancar`.
+   *
+   * Opcional porque nem toda montagem desta tela precisa oferecer o ajuste
+   * fino; sem ela o cronômetro volta a ser só um número, sem virar botão.
+   */
+  onDefinirRestante?: (segundos: number) => Promise<string | null>;
   /** Pausa/retoma o cronômetro. Mesmo contrato de `onAvancar`. */
   onPausar: (pausar: boolean) => Promise<string | null>;
   /** Marca a ordem como concluída — o "Concluir culto" do pé do roteiro. */
@@ -89,6 +101,7 @@ export function ExecucaoCulto({
   onAvancar,
   onIrParaBloco,
   onTempoExtra,
+  onDefinirRestante,
   onPausar,
   onConcluir,
   onEditar,
@@ -96,6 +109,8 @@ export function ExecucaoCulto({
 }: Props) {
   const [ocupado, setOcupado] = useState(false);
   const [recado, setRecado] = useState<string | null>(null);
+  /** Cronômetro em modo de digitação. Ver `CronometroEditavel`. */
+  const [editandoTempo, setEditandoTempo] = useState(false);
 
   const indiceAtual = culto ? indiceDoBlocoAtual(culto) : -1;
   const comecou = culto != null && indiceAtual !== -1;
@@ -103,18 +118,29 @@ export function ExecucaoCulto({
 
   // O relógio só corre quando há o que contar: sem bloco em andamento, ou
   // com o culto pausado, nada na tela muda de segundo em segundo.
-  const agora = useRelogio(comecou && !pausado);
+  //
+  // Editando o tempo ele também para: o tique não chegaria a apagar o que
+  // está sendo digitado (o `<input>` é controlado pelo rascunho do próprio
+  // `CronometroEditavel`), mas re-renderizar a tela inteira uma vez por
+  // segundo durante a digitação é trabalho à toa — e mexe na barra de
+  // progresso e no "% concluído" logo abaixo do campo, o que distrai quem
+  // está tentando ler o que digitou.
+  const agora = useRelogio(comecou && !pausado && !editandoTempo);
 
   // Esc sai da operação — atalho esperado de qualquer painel em tela cheia, e
   // uma saída a mais num momento em que ninguém quer procurar botão.
+  //
+  // Editando o tempo, Esc pertence ao campo (cancela a digitação) e não pode
+  // fechar a tela junto: quem apertou queria desfazer o que digitou, não
+  // abandonar a operação do culto.
   useEffect(() => {
-    if (!onVoltar) return;
+    if (!onVoltar || editandoTempo) return;
     function aoTeclar(e: KeyboardEvent) {
       if (e.key === 'Escape') onVoltar?.();
     }
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [onVoltar]);
+  }, [onVoltar, editandoTempo]);
 
   async function executar(acao: () => Promise<string | null>) {
     // Trava durante a ida ao servidor: dois "+5" seguidos somariam 10, e dois
@@ -295,22 +321,30 @@ export function ExecucaoCulto({
             {comecou && !encerrado && (
               <div>
                 <div className="flex flex-wrap items-baseline gap-4">
-                  <Numero
-                    className="text-6xl leading-[0.9] font-bold tracking-[-0.04em] sm:text-[88px]"
-                    style={{ color: corDoCronometro }}
-                  >
-                    {estourou ? '+' : ''}
-                    {formatarCronometro(restante)}
-                  </Numero>
+                  <CronometroEditavel
+                    restante={restante}
+                    cor={corDoCronometro}
+                    editando={editandoTempo}
+                    onAbrir={() => setEditandoTempo(true)}
+                    onFechar={() => setEditandoTempo(false)}
+                    onConfirmar={
+                      onDefinirRestante
+                        ? (segundos) => executar(() => onDefinirRestante(segundos))
+                        : undefined
+                    }
+                    desabilitado={ocupado}
+                  />
                   <p
                     className="pb-2 text-xs font-bold tracking-[0.1em] uppercase"
                     style={{ color: 'var(--texto-fraco)' }}
                   >
-                    {pausado
-                      ? 'Pausado'
-                      : estourou
-                        ? 'Além do previsto'
-                        : 'Restantes neste bloco'}
+                    {editandoTempo
+                      ? 'Enter confirma · Esc cancela'
+                      : pausado
+                        ? 'Pausado'
+                        : estourou
+                          ? 'Além do previsto'
+                          : 'Restantes neste bloco'}
                   </p>
                 </div>
 
@@ -362,13 +396,20 @@ export function ExecucaoCulto({
             {recado && <Recado texto={recado} onDispensar={() => setRecado(null)} />}
 
             {/* Avançar é o segundo elemento mais forte da tela, depois do
-                cronômetro; "+1/+5" ficam ao lado, menores e monoespaçados,
-                para não serem acertados sem querer no lugar dele. */}
-            <div className="mt-auto flex flex-wrap gap-3">
+                cronômetro. Os ajustes de tempo ficam numa LINHA PRÓPRIA
+                abaixo, discretos e monoespaçados: são quatro agora (−5 −1
+                +1 +5), e enfileirá-los ao lado do "Avançar" espremeria os
+                dois — no celular, quatro alvos de 44px mais o botão
+                principal não cabem na mesma faixa sem quebrar feio.
+
+                A ordem é a da reta numérica (tirar à esquerda, somar à
+                direita), com o par de 1 min no meio: os ajustes finos ficam
+                vizinhos, e os "grandes" nas pontas, longe um do outro. */}
+            <div className="mt-auto flex flex-col gap-3">
               <BotaoPrincipal
                 onClick={() => executar(onAvancar)}
                 disabled={ocupado || encerrado || blocos.length === 0}
-                className="h-16 min-w-full text-lg sm:h-[68px] sm:min-w-0 sm:flex-1"
+                className="h-16 w-full text-lg sm:h-[68px]"
               >
                 {encerrado
                   ? 'Culto encerrado'
@@ -379,17 +420,27 @@ export function ExecucaoCulto({
                       : 'Avançar bloco →'}
               </BotaoPrincipal>
 
-              {[1, 5].map((minutos) => (
-                <BotaoDiscreto
-                  key={minutos}
-                  onClick={() => executar(() => onTempoExtra(minutos))}
-                  disabled={ocupado || !comecou || encerrado}
-                  aria-label={`Dar mais ${minutos} minuto${minutos > 1 ? 's' : ''} ao bloco em andamento`}
-                  className="numero h-16 flex-1 font-bold sm:h-[68px] sm:w-[88px] sm:flex-none"
-                >
-                  +{minutos} min
-                </BotaoDiscreto>
-              ))}
+              <div className="flex gap-2">
+                {[-5, -1, 1, 5].map((minutos) => (
+                  <BotaoDiscreto
+                    key={minutos}
+                    onClick={() => executar(() => onTempoExtra(minutos))}
+                    disabled={ocupado || !comecou || encerrado}
+                    aria-label={
+                      minutos > 0
+                        ? `Dar mais ${minutos} minuto${minutos > 1 ? 's' : ''} ao bloco em andamento`
+                        : `Tirar ${-minutos} minuto${minutos < -1 ? 's' : ''} do bloco em andamento`
+                    }
+                    className="numero h-12 flex-1 px-0 font-bold"
+                  >
+                    {/* Sinal literal `−` (U+2212), não hífen: no traço do
+                        hífen o "-5" fica quase indistinguível do "+5" de
+                        relance, que é como esta tela é lida. */}
+                    {minutos > 0 ? '+' : '−'}
+                    {Math.abs(minutos)}
+                  </BotaoDiscreto>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -507,6 +558,144 @@ export function ExecucaoCulto({
         </div>
       </Cartao>
     </div>
+  );
+}
+
+/**
+ * O número grande do cronômetro, que vira campo de digitação ao ser clicado.
+ *
+ * O gesto pedido foi "clicar na caixa e escrever o tempo". O que se digita é
+ * o que AINDA FALTA agora (está em 09:49, digita 5, passa a contar 5
+ * minutos) — e não a duração do bloco: quem olha o cronômetro no domingo está
+ * pensando "faltam quantos", não "o bloco tem quantos". A duração continua
+ * sendo o que o roteiro diz, e é o `+1/+5` que mexe nela.
+ *
+ * É um `<button>` que TROCA por um `<input>`, não um `<div onClick>`: o
+ * cronômetro virou controle interativo, e precisa entrar na ordem de
+ * tabulação, responder a Enter/Espaço e se anunciar como algo acionável.
+ *
+ * Sobre o lint (`react-hooks/set-state-in-effect`): não há efeito nenhum
+ * sincronizando o rascunho com o `restante`. O rascunho nasce no gesto de
+ * abrir (`onClick`), fora do render, e daí em diante o campo é dono do que
+ * mostra — é justamente isso que impede o tique do relógio de sobrescrever a
+ * digitação. O único efeito aqui é o foco, que não muda estado do React.
+ */
+function CronometroEditavel({
+  restante,
+  cor,
+  editando,
+  onAbrir,
+  onFechar,
+  onConfirmar,
+  desabilitado,
+}: {
+  /** Segundos que faltam. Negativo = o bloco estourou o tempo. */
+  restante: number;
+  cor: string;
+  editando: boolean;
+  onAbrir: () => void;
+  onFechar: () => void;
+  /** Ausente = cronômetro só de leitura, sem virar botão. */
+  onConfirmar?: (segundos: number) => void;
+  desabilitado: boolean;
+}) {
+  const [rascunho, setRascunho] = useState('');
+  const campo = useRef<HTMLInputElement>(null);
+
+  const CLASSES_NUMERO =
+    'text-6xl leading-[0.9] font-bold tracking-[-0.04em] sm:text-[88px]';
+
+  useEffect(() => {
+    if (!editando) return;
+    // Seleciona tudo ao abrir: o gesto seguinte quase sempre é digitar um
+    // tempo NOVO, não emendar no que já estava — obrigar a apagar antes
+    // seria um passo a mais com o culto correndo.
+    campo.current?.select();
+  }, [editando]);
+
+  function fechar() {
+    setRascunho('');
+    onFechar();
+  }
+
+  /** Enter e o clique fora passam por aqui. Entrada ilegível não fecha nada. */
+  function confirmar() {
+    const segundos = lerTempoDigitado(rascunho);
+    // Campo vazio (`null` de "não deu para ler o vazio") é desistência —
+    // apagar tudo e sair não deveria zerar o cronômetro do culto.
+    if (segundos === null) {
+      fechar();
+      return;
+    }
+    onConfirmar?.(segundos);
+    fechar();
+  }
+
+  if (!onConfirmar) {
+    return (
+      <Numero className={CLASSES_NUMERO} style={{ color: cor }}>
+        {restante < 0 ? '+' : ''}
+        {formatarCronometro(restante)}
+      </Numero>
+    );
+  }
+
+  if (editando) {
+    return (
+      <input
+        ref={campo}
+        value={rascunho}
+        onChange={(e) => setRascunho(e.target.value)}
+        // `inputMode="numeric"` e não `type="number"`: o campo aceita
+        // "5:30", que um input numérico recusaria — e o teclado do celular
+        // precisa abrir nos números do mesmo jeito.
+        inputMode="numeric"
+        autoComplete="off"
+        aria-label="Tempo restante neste bloco, em minutos ou MM:SS"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') confirmar();
+          // `stopPropagation` porque a tela inteira escuta Esc para sair da
+          // operação; sem isso, cancelar a digitação fecharia o painel junto.
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            fechar();
+          }
+        }}
+        // Clicar fora CONFIRMA, e não cancela: a pessoa digitou um número
+        // com intenção, e descartá-lo por tocar em outro lugar da tela
+        // (fácil de fazer sem querer no celular, no escuro) obrigaria a
+        // digitar de novo. O caminho de desfazer existe e é explícito —
+        // Esc — e um valor confirmado por engano se corrige digitando outro.
+        onBlur={confirmar}
+        className={`numero w-[4.5ch] min-w-0 rounded-xl border bg-transparent px-2 text-left tabular-nums focus:outline-none ${CLASSES_NUMERO}`}
+        style={{
+          color: cor,
+          borderColor: 'var(--acento-suave-borda)',
+          background: 'var(--acento-suave-fundo)',
+        }}
+        placeholder={formatarCronometro(restante)}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        // O rascunho começa VAZIO, não preenchido com o tempo atual: o
+        // número corrente já aparece de placeholder, e um campo vazio deixa
+        // digitar "5" direto, sem apagar nada antes.
+        setRascunho('');
+        onAbrir();
+      }}
+      disabled={desabilitado}
+      aria-label={`Ajustar tempo restante. Faltam ${formatarCronometro(restante)}`}
+      className={`numero -mx-2 cursor-pointer rounded-xl border border-transparent bg-transparent px-2 text-left transition-colors hover:border-borda-forte disabled:cursor-default disabled:opacity-50 ${CLASSES_NUMERO}`}
+      style={{ color: cor }}
+    >
+      {restante < 0 ? '+' : ''}
+      {formatarCronometro(restante)}
+    </button>
   );
 }
 

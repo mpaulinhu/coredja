@@ -5,11 +5,15 @@ import { pessoaDaRequisicao } from '@/lib/sessao';
 
 export const dynamic = 'force-dynamic';
 
-/** Teto do que se pode dar de uma vez. Acima disso é engano de digitação. */
+/**
+ * Teto do que se pode dar (ou tirar) de uma vez, para cada lado. Acima disso
+ * é engano de digitação — os botões da tela mandam 1 e 5.
+ */
 const MAXIMO_MINUTOS = 60;
 
 /**
- * Dá mais alguns minutos ao bloco em andamento, sem mexer na ordem do culto.
+ * Dá (ou tira) alguns minutos do bloco em andamento, sem mexer na ordem do
+ * culto.
  *
  * Mesma permissão de avançar (`culto:avancar`) porque é a mesma pessoa e o
  * mesmo momento: quem opera no domingo e vê o bloco estourando o tempo é
@@ -42,9 +46,20 @@ export async function POST(request: Request) {
   } | null;
   const minutos = Number(corpo?.minutos);
 
-  if (!Number.isFinite(minutos) || minutos <= 0 || minutos > MAXIMO_MINUTOS) {
+  // Negativo é válido (é o "-1/-5" da tela), zero não: uma requisição que
+  // não muda nada gravaria no Firestore e mexeria no telão à toa, então é
+  // erro de quem chamou, não um no-op silencioso. Inteiro porque o
+  // cronômetro do bloco é contado em minutos cheios aqui — quem precisa de
+  // segundo usa `tempo-restante`.
+  if (
+    !Number.isInteger(minutos) ||
+    minutos === 0 ||
+    Math.abs(minutos) > MAXIMO_MINUTOS
+  ) {
     return Response.json(
-      { erro: `Informe de 1 a ${MAXIMO_MINUTOS} minutos.` },
+      {
+        erro: `Informe de -${MAXIMO_MINUTOS} a ${MAXIMO_MINUTOS} minutos, exceto zero.`,
+      },
       { status: 400 },
     );
   }

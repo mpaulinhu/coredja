@@ -178,7 +178,8 @@ export function TelaCulto() {
   );
 
   /**
-   * Estica o cronômetro do bloco em andamento, sem mexer na ordem montada.
+   * Estica (ou encurta, com `minutos` negativo) o cronômetro do bloco em
+   * andamento, sem mexer na ordem montada.
    *
    * Grava em `minutosExtras` (não em `bloco.minutos`) e manda o mesmo tempo
    * ao Holyrics — ver `api/culto/tempo-extra`.
@@ -201,7 +202,36 @@ export function TelaCulto() {
       // `holyricsParaTela` devolve null quando a integração nem está
       // configurada, então cair aqui significa erro de verdade.
       if (!holyrics || holyrics.estado === 'enviado') return null;
-      return `Mais ${minutos} min na tela, mas o Holyrics não recebeu. ${holyrics.motivo ?? ''}`.trim();
+      const gesto =
+        minutos > 0 ? `Mais ${minutos} min` : `Menos ${Math.abs(minutos)} min`;
+      return `${gesto} na tela, mas o Holyrics não recebeu. ${holyrics.motivo ?? ''}`.trim();
+    },
+    [],
+  );
+
+  /**
+   * Acerta quanto AINDA FALTA do bloco em andamento — o tempo digitado no
+   * cronômetro da tela.
+   *
+   * Não confundir com `tempoExtra`: aquele muda a DURAÇÃO prevista do bloco
+   * (`minutosExtras`), este muda o RELÓGIO (o quanto se considera já
+   * corrido). Ver `api/culto/tempo-restante`.
+   */
+  const definirRestante = useCallback(
+    async (segundos: number, cultoId?: string): Promise<string | null> => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
+      const resp = await fetch('/api/culto/tempo-restante', {
+        method: 'POST',
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
+        body: JSON.stringify(cultoId ? { segundos, cultoId } : { segundos }),
+      });
+      const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
+      if (!resp.ok) return corpo?.erro ?? 'Não foi possível acertar o tempo.';
+
+      const holyrics = corpo?.holyrics;
+      if (!holyrics || holyrics.estado === 'enviado') return null;
+      return `Tempo acertado na tela, mas o Holyrics não recebeu. ${holyrics.motivo ?? ''}`.trim();
     },
     [],
   );
@@ -316,6 +346,7 @@ export function TelaCulto() {
             : Promise.resolve('Nenhuma ordem ativa agora.')
         }
         onTempoExtra={(minutos) => tempoExtra(minutos)}
+        onDefinirRestante={(segundos) => definirRestante(segundos)}
         onPausar={(pausarAgora) => pausar(pausarAgora)}
       />
     );
@@ -331,6 +362,7 @@ export function TelaCulto() {
         onAvancar={() => avancar(operandoId)}
         onIrParaBloco={(blocoId) => irParaBloco(operandoId, blocoId)}
         onTempoExtra={(minutos) => tempoExtra(minutos, operandoId)}
+        onDefinirRestante={(segundos) => definirRestante(segundos, operandoId)}
         onPausar={(pausarAgora) => pausar(pausarAgora, operandoId)}
         onConcluir={async () => {
           await concluir(operandoId, true);
