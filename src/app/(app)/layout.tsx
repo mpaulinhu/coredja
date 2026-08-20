@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
+import { CascaApp } from '@/components/casca/CascaApp';
 import { ExigeLogin } from '@/components/casca/ExigeLogin';
-import { MenuLateral } from '@/components/casca/MenuLateral';
 
 /**
  * Casca das telas internas do Coredja (Painel, e as que vierem depois).
@@ -19,10 +19,7 @@ import { MenuLateral } from '@/components/casca/MenuLateral';
 export default function LayoutApp({ children }: { children: ReactNode }) {
   return (
     <ExigeLogin>
-      <div className="flex h-full">
-        <MenuLateral />
-        <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
-      </div>
+      <CascaApp>{children}</CascaApp>
     </ExigeLogin>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { CabecalhoDaTela } from '@/components/CabecalhoDaTela';
 import type { Escala } from '@/lib/escala';
 
 interface Props {
@@ -18,23 +19,23 @@ export function ConfirmacaoEscala({ escala, onMarcarPresenca }: Props) {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-xl flex-col px-5 py-8">
-      <p className="text-xs text-texto-fraco">
+    <div className="flex h-full w-full flex-col px-5 py-8 sm:px-8">
+      <p className="text-center text-xs text-texto-fraco first-letter:uppercase">
         {new Date(`${escala.data}T00:00:00`).toLocaleDateString('pt-BR', {
           weekday: 'long',
           day: '2-digit',
           month: 'long',
         })}
       </p>
-      <h1 className="mt-1 text-2xl font-bold tracking-tight text-texto">
-        Escala do Time
-      </h1>
+      <div className="mt-1">
+        <CabecalhoDaTela titulo="Escala do Time" />
+      </div>
 
-      <ul className="mt-6 flex flex-col gap-2">
+      <ul className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
         {escala.escalados.map((e) => (
           <li
             key={e.id}
-            className="flex items-center gap-3 rounded-xl border border-borda bg-fundo-cartao px-4 py-3.5"
+            className="flex items-center gap-3 rounded-xl border border-borda bg-fundo-cartao px-4 py-3"
           >
             <div className="min-w-0 flex-1">
               <p className="text-xs uppercase tracking-wide text-texto-fraco">

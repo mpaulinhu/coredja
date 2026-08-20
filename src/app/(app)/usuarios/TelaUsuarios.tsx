@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
+import { CabecalhoDaTela } from '@/components/CabecalhoDaTela';
 import type { Papel, Pessoa } from '@/lib/papeis';
 import type { Departamento } from '@/lib/types';
 import { FormularioConvite } from './FormularioConvite';
@@ -151,12 +152,8 @@ export function TelaUsuarios() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
-      <h1 className="text-2xl font-bold tracking-tight text-texto">Usuários</h1>
-      <p className="mt-1 text-sm text-texto-suave">
-        Quem tem login no Coredja, o que cada um pode fazer, e quais áreas de
-        recado enxerga.
-      </p>
+    <div className="w-full px-5 py-8 sm:px-8">
+      <CabecalhoDaTela titulo="Usuários" />
 
       {erro && (
         <p role="alert" className="mt-3 text-sm" style={{ color: 'var(--urgente)' }}>
@@ -187,12 +184,14 @@ export function TelaUsuarios() {
         </div>
       )}
 
-      <div className="mt-6 rounded-2xl border border-borda bg-fundo-elevado p-5 sm:p-6">
+      {/* Centralizado, não encostado à esquerda: um cartão estreito colado
+          numa borda, com a lista abaixo indo até a outra, desalinha a tela. */}
+      <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-borda bg-fundo-elevado p-5 sm:p-6">
         <h2 className="text-sm font-semibold text-texto-suave">Convidar pessoa</h2>
         <FormularioConvite areas={areas} departamentos={departamentos} onConvidar={convidar} />
       </div>
 
-      <ul className="mt-6 flex flex-col gap-2">
+      <ul className="mt-4 flex flex-col gap-2">
         {pessoas.length === 0 && (
           <p className="text-sm text-texto-fraco">Nenhuma pessoa cadastrada ainda.</p>
         )}

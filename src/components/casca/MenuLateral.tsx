@@ -2,9 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
-import { IconeAvisos, IconeCulto, IconeRecados, IconeUsuarios } from './IconesMenu';
+import {
+  IconeAvisos,
+  IconeCulto,
+  IconeDepartamentos,
+  IconeFechar,
+  IconeRecados,
+  IconeUsuarios,
+} from './IconesMenu';
 
 /**
  * Menu lateral do Coredja.
@@ -16,6 +23,12 @@ import { IconeAvisos, IconeCulto, IconeRecados, IconeUsuarios } from './IconesMe
  * Fica fora do `(app)/layout.tsx` como componente próprio, e não dentro dele
  * direto, para o layout continuar simples de ler: ele monta a moldura, este
  * arquivo decide o que aparece nela.
+ *
+ * Responsivo (ELO local, sem issue — bug de layout achado pelo Marcos):
+ * abaixo de `md` este componente vira uma GAVETA por cima do conteúdo
+ * (controlada por `aberto`/`aoFechar`, estado que mora em `CascaApp`), em vez
+ * de coluna fixa sempre visível. De `md` para cima, comportamento igual ao
+ * de sempre — coluna estática, sem gaveta nem overlay.
  */
 
 interface ItemDeMenu {
@@ -36,91 +49,148 @@ const ITENS: ItemDeMenu[] = [
   // um dia volte a fazer sentido — só a entrada de menu foi removida.
 ];
 
-const ITEM_USUARIOS: ItemDeMenu = {
-  href: '/usuarios',
-  rotulo: 'Usuários',
-  Icone: IconeUsuarios,
-};
+/** Itens que só o admin vê — ver `ehAdmin` abaixo. */
+const ITENS_DE_ADMIN: ItemDeMenu[] = [
+  { href: '/usuarios', rotulo: 'Usuários', Icone: IconeUsuarios },
+  { href: '/departamentos', rotulo: 'Departamentos', Icone: IconeDepartamentos },
+];
 
-export function MenuLateral() {
+interface MenuLateralProps {
+  /** Verdadeiro só importa abaixo de `md` — controla a gaveta aberta/fechada. */
+  aberto: boolean;
+  aoFechar: () => void;
+}
+
+export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
   const caminho = usePathname();
+  const botaoFecharRef = useRef<HTMLButtonElement>(null);
 
-  // "Usuários" só aparece para quem tem `pessoas:escrever` (admin). O menu
-  // não sabe o papel de quem está logado — pergunta ao servidor tentando a
-  // mesma rota que a tela usa; 200 confirma acesso, 403 esconde o item. É o
-  // mesmo "pergunte fazendo" de `TelaCulto`: uma fonte de verdade só, não
-  // duas checagens de permissão que podem um dia divergir.
+  // Os itens de admin só aparecem para quem pode de fato usá-los. O menu não
+  // sabe o papel de quem está logado — pergunta ao servidor, mesmo "pergunte
+  // fazendo" de `TelaCulto`: uma fonte de verdade só, não duas checagens de
+  // permissão que podem um dia divergir.
+  //
+  // Aqui a pergunta é `/api/departamentos` e não `/api/pessoas` porque essa
+  // rota já devolve a permissão como dado (`podeEditar`). `/api/pessoas`
+  // responde 403 a quem não é admin, e ler permissão do status HTTP confunde
+  // "sem acesso" com "rota fora do ar" — as duas permissões são exclusivas de
+  // admin, então um campo explícito cobre os dois itens.
   const [ehAdmin, setEhAdmin] = useState(false);
   useEffect(() => {
     (async () => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return;
-      const resp = await fetch('/api/pessoas', { headers: cabecalho });
-      setEhAdmin(resp.ok);
+      const resp = await fetch('/api/departamentos', { headers: cabecalho });
+      if (!resp.ok) return;
+      const dados = await resp.json().catch(() => ({}));
+      setEhAdmin(dados.podeEditar === true);
     })();
   }, []);
 
-  const itens = ehAdmin ? [...ITENS, ITEM_USUARIOS] : ITENS;
+  const itens = ehAdmin ? [...ITENS, ...ITENS_DE_ADMIN] : ITENS;
+
+  // Navegar por qualquer caminho (item do menu, ou link dentro do conteúdo
+  // da própria página) fecha a gaveta — sem isso ela fica aberta por cima da
+  // tela nova até o usuário fechar à mão.
+  useEffect(() => {
+    aoFechar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caminho]);
+
+  // Foco visível dentro da gaveta ao abrir, para quem navega por teclado —
+  // sem isso o foco fica "perdido" atrás do overlay.
+  useEffect(() => {
+    if (aberto) botaoFecharRef.current?.focus();
+  }, [aberto]);
 
   return (
-    <nav
-      aria-label="Menu principal"
-      className="flex h-full w-64 shrink-0 flex-col border-r border-borda bg-fundo-elevado"
-    >
-      <div className="px-5 py-6">
-        <Link href="/" className="text-lg font-bold tracking-tight text-texto">
-          Coredja
-        </Link>
-        <p className="mt-0.5 text-xs text-texto-fraco">
-          Comunicação interna da igreja
-        </p>
-      </div>
+    <>
+      {/* Overlay: só existe (e só recebe clique) com a gaveta aberta abaixo
+          de `md`. Em telas `md+` o menu nunca é gaveta, então isto some. */}
+      {aberto && (
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          onClick={aoFechar}
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+        />
+      )}
 
-      <ul className="flex flex-col gap-1 px-3">
-        {itens.map((item) => {
-          const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
+      <nav
+        aria-label="Menu principal"
+        className={`fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[85vw] shrink-0 flex-col border-r border-borda bg-fundo-elevado transition-transform duration-200 ease-out md:static md:z-auto md:w-64 md:max-w-none md:translate-x-0 ${
+          aberto ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-start justify-between px-5 py-6">
+          <div>
+            <Link href="/" className="text-lg font-bold tracking-tight text-texto">
+              Coredja
+            </Link>
+            <p className="mt-0.5 text-xs text-texto-fraco">
+              Comunicação interna da igreja
+            </p>
+          </div>
 
-          if (item.emBreve) {
+          {/* Só existe visualmente no celular — no desktop a gaveta não abre,
+              então não faz sentido oferecer um jeito de "fechar" algo estático. */}
+          <button
+            ref={botaoFecharRef}
+            type="button"
+            aria-label="Fechar menu"
+            onClick={aoFechar}
+            className="rounded-lg p-1.5 text-texto-suave hover:bg-fundo-cartao hover:text-texto md:hidden"
+          >
+            <IconeFechar />
+          </button>
+        </div>
+
+        <ul className="flex flex-col gap-1 px-3">
+          {itens.map((item) => {
+            const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
+
+            if (item.emBreve) {
+              return (
+                <li key={item.href}>
+                  <span
+                    className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-texto-fraco opacity-60"
+                    title="Ainda não construída"
+                  >
+                    <item.Icone className="shrink-0" />
+                    {item.rotulo}
+                    <span className="ml-auto text-[10px] uppercase tracking-wide text-texto-fraco">
+                      em breve
+                    </span>
+                  </span>
+                </li>
+              );
+            }
+
             return (
               <li key={item.href}>
-                <span
-                  className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-texto-fraco opacity-60"
-                  title="Ainda não construída"
+                <Link
+                  href={item.href}
+                  aria-current={ativo ? 'page' : undefined}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    ativo
+                      ? 'bg-acento/15 text-texto'
+                      : 'text-texto-suave hover:bg-fundo-cartao hover:text-texto'
+                  }`}
                 >
                   <item.Icone className="shrink-0" />
                   {item.rotulo}
-                  <span className="ml-auto text-[10px] uppercase tracking-wide text-texto-fraco">
-                    em breve
-                  </span>
-                </span>
+                </Link>
               </li>
             );
-          }
+          })}
+        </ul>
 
-          return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                aria-current={ativo ? 'page' : undefined}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  ativo
-                    ? 'bg-acento/15 text-texto'
-                    : 'text-texto-suave hover:bg-fundo-cartao hover:text-texto'
-                }`}
-              >
-                <item.Icone className="shrink-0" />
-                {item.rotulo}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-
-      <div className="mt-auto px-5 py-5 text-xs text-texto-fraco">
-        <Link href="/" className="hover:text-texto-suave">
-          ← Voltar para a home
-        </Link>
-      </div>
-    </nav>
+        <div className="mt-auto px-5 py-5 text-xs text-texto-fraco">
+          <Link href="/" className="hover:text-texto-suave">
+            ← Voltar para a home
+          </Link>
+        </div>
+      </nav>
+    </>
   );
 }

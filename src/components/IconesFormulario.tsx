@@ -36,3 +36,29 @@ export function IconeOlhoFechado({ className }: Props) {
     </svg>
   );
 }
+
+/** Tema claro ativo — clicar oferece trocar para escuro. */
+export function IconeSol({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2" />
+      <path d="M12 19v2" />
+      <path d="M4.2 4.2l1.4 1.4" />
+      <path d="M18.4 18.4l1.4 1.4" />
+      <path d="M3 12h2" />
+      <path d="M19 12h2" />
+      <path d="M4.2 19.8l1.4-1.4" />
+      <path d="M18.4 5.6l1.4-1.4" />
+    </svg>
+  );
+}
+
+/** Tema escuro ativo — clicar oferece trocar para claro. */
+export function IconeLua({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z" />
+    </svg>
+  );
+}

@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { escutarSessao, sair } from '@/lib/auth-cliente';
+import { useTema } from '@/lib/tema-cliente';
+import { IconeLua, IconeSol } from '@/components/IconesFormulario';
 import { ModalTrocarSenha } from './ModalTrocarSenha';
 
 /**
@@ -23,6 +25,7 @@ export function ExigeLogin({ children }: { children: ReactNode }) {
   );
   const [email, setEmail] = useState<string | null>(null);
   const [trocandoSenha, setTrocandoSenha] = useState(false);
+  const { tema, alternarTema } = useTema();
 
   useEffect(() => {
     return escutarSessao((usuario) => {
@@ -49,6 +52,14 @@ export function ExigeLogin({ children }: { children: ReactNode }) {
       <div className="flex items-center justify-between border-b border-borda px-5 py-2.5 text-xs text-texto-fraco">
         <span>{email}</span>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={alternarTema}
+            aria-label={tema === 'escuro' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            className="text-texto-suave hover:text-texto"
+          >
+            {tema === 'escuro' ? <IconeLua /> : <IconeSol />}
+          </button>
           <button
             type="button"
             onClick={() => setTrocandoSenha(true)}
