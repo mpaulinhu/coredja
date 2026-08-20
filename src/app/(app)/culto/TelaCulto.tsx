@@ -11,6 +11,12 @@ import { ListaCultos } from './ListaCultos';
 
 const REGEX_ID = /^\d{4}-\d{2}-\d{2}__\d{2}:\d{2}$/;
 
+/** O que as rotas de culto devolvem sobre o Holyrics, quando devolvem. */
+interface RespostaHolyrics {
+  erro?: string;
+  holyrics?: { estado: string; motivo?: string } | null;
+}
+
 /** Distância em minutos entre dois horários `"HH:MM"`, sempre positiva. */
 function distanciaMinutos(a: string, b: string): number {
   const [ha, ma] = a.split(':').map(Number);
@@ -41,6 +47,8 @@ export function TelaCulto() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   /** Blocos vindos de "Duplicar", para pré-preencher uma ordem nova. */
   const [blocosParaDuplicar, setBlocosParaDuplicar] = useState<Bloco[] | null>(null);
+  /** Se o servidor fala com o Holyrics — sem isso, "+1 min" não teria efeito. */
+  const [holyricsLigado, setHolyricsLigado] = useState(false);
 
   useEffect(() => {
     const db = getFirestoreCliente();
@@ -80,6 +88,23 @@ export function TelaCulto() {
     })();
   }, []);
 
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho || !vivo) return;
+      const resp = await fetch('/api/holyrics/status', { headers: cabecalho });
+      if (!resp.ok || !vivo) return;
+      const dados = (await resp.json()) as { configurado?: boolean };
+      if (vivo) setHolyricsLigado(dados.configurado === true);
+    })().catch(() => {
+      // Integração é opcional: não saber se está ligada não quebra a tela.
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
   const salvar = useCallback(
     async (data: string, hora: string, blocos: Bloco[], idAnterior?: string) => {
       const cabecalho = await cabecalhoDeAutorizacao();
@@ -109,10 +134,40 @@ export function TelaCulto() {
     });
   }, []);
 
-  const avancar = useCallback(async () => {
+  /**
+   * Avançar bloco. Devolve o recado sobre o Holyrics (ou `null`) para a tela
+   * mostrar — o avanço em si já aconteceu no servidor de qualquer jeito, ver
+   * `api/culto/avancar/route.ts`.
+   */
+  const avancar = useCallback(async (): Promise<string | null> => {
     const cabecalho = await cabecalhoDeAutorizacao();
-    if (!cabecalho) return;
-    await fetch('/api/culto/avancar', { method: 'POST', headers: cabecalho });
+    if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
+    const resp = await fetch('/api/culto/avancar', { method: 'POST', headers: cabecalho });
+    const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
+    if (!resp.ok) return corpo?.erro ?? 'Não foi possível avançar.';
+
+    const holyrics = corpo?.holyrics;
+    if (!holyrics || holyrics.estado === 'enviado') return null;
+    return `Bloco avançado, mas o cronômetro não foi ao Holyrics. ${holyrics.motivo ?? ''}`.trim();
+  }, []);
+
+  /** Estica o cronômetro do bloco em andamento, sem mexer na ordem montada. */
+  const tempoExtra = useCallback(async (minutos: number): Promise<string | null> => {
+    const cabecalho = await cabecalhoDeAutorizacao();
+    if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
+    const resp = await fetch('/api/culto/tempo-extra', {
+      method: 'POST',
+      headers: { ...cabecalho, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutos }),
+    });
+    const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
+    if (!resp.ok) return corpo?.erro ?? 'Não foi possível dar mais tempo.';
+
+    const holyrics = corpo?.holyrics;
+    if (!holyrics || holyrics.estado === 'enviado') {
+      return `Mais ${minutos} min no cronômetro.`;
+    }
+    return `Não foi possível falar com o Holyrics. ${holyrics.motivo ?? ''}`.trim();
   }, []);
 
   const concluir = useCallback(async (id: string, concluirAgora: boolean) => {
@@ -198,6 +253,8 @@ export function TelaCulto() {
       onRemover={remover}
       onAvancar={avancar}
       onConcluir={concluir}
+      onTempoExtra={tempoExtra}
+      holyricsLigado={holyricsLigado}
     />
   );
 }

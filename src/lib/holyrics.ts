@@ -81,7 +81,7 @@ export const MOTIVO_IMAGEM_NAO_SUPORTADA =
  * texto, sem a arte que a pessoa achou que tinha projetado.
  */
 export const MOTIVO_IMAGEM_FICOU_DE_FORA =
-  'O texto foi para o telão, mas a arte não: a API do Holyrics não recebe imagens de fora. Projete a arte manualmente.';
+  'Só o texto foi: a API do Holyrics não recebe imagens de fora. Projete a arte manualmente.';
 
 /** Um aviso só pode ser projetado via API se tiver texto. */
 export function podeEnviarAoHolyrics(aviso: {
@@ -127,6 +127,49 @@ export async function enviarAvisoAoHolyrics(aviso: {
 
     // Deu certo, mas o aviso tinha arte junto: quem publicou precisa saber
     // que só o texto chegou lá, senão conta com uma arte que não subiu.
+    if (resultado.estado === 'enviado' && aviso.imagem) {
+      return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
+    }
+    return resultado;
+  } catch (erro) {
+    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+  }
+}
+
+/**
+ * Põe o aviso na fila do Holyrics, sem projetar nada.
+ *
+ * Diferente de `enviarAvisoAoHolyrics`, que joga o texto no telão na hora:
+ * aqui o aviso vira um item na playlist e quem opera decide quando exibir.
+ * É o caminho normal para um recado que não precisa interromper o culto.
+ *
+ * `type: "title"` é o item de texto livre da playlist — os outros tipos
+ * (`text`, `announcement`) exigem um item JÁ cadastrado dentro do Holyrics,
+ * referenciado por id, e não servem para texto vindo de fora.
+ */
+export async function enviarAvisoAFilaDoHolyrics(aviso: {
+  titulo: string;
+  texto: string;
+  imagem?: unknown;
+}): Promise<ResultadoHolyrics> {
+  const config = configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  if (!podeEnviarAoHolyrics(aviso)) {
+    return { estado: 'nao-suportado', motivo: MOTIVO_IMAGEM_NAO_SUPORTADA };
+  }
+
+  const texto = [aviso.titulo.trim(), aviso.texto.trim()]
+    .filter(Boolean)
+    .join(' — ');
+
+  try {
+    const resultado = await chamar(config, 'AddToPlaylist', {
+      items: [{ type: 'title', name: texto }],
+      index: -1, // -1 = no fim da fila
+      ignore_duplicates: true,
+    });
+
     if (resultado.estado === 'enviado' && aviso.imagem) {
       return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
     }
@@ -198,4 +241,159 @@ function mensagemDoErro(erro: unknown): string {
     return 'O Holyrics não respondeu a tempo. Ele está aberto e na mesma rede?';
   }
   return 'Não foi possível falar com o Holyrics. Confira se ele está aberto e o endereço configurado.';
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * CRONÔMETRO DO PAINEL DE COMUNICAÇÃO
+ *
+ * O painel de comunicação do Holyrics é a tela de retorno que a equipe vê do
+ * palco. Além do texto (usado pelos avisos, acima), ele tem um cronômetro
+ * regressivo próprio — que é o que a Ordem do Culto usa para mostrar quanto
+ * falta do bloco em andamento.
+ *
+ * Verificado contra um Holyrics real em 20/08/2026: os campos aceitos são
+ * `minutes` e `seconds` (números). A documentação oficial menciona um campo
+ * `time: "10:00"`, que NÃO funciona — a resposta é
+ * `Fields 'minutes,seconds' or 'exact_time' not found or invalid`.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Liga o cronômetro regressivo do painel com `minutos` no relógio.
+ *
+ * `stop_at_zero: false` de propósito: ao chegar em zero o cronômetro segue
+ * contando para baixo (negativo). Quem está no palco precisa justamente ver
+ * QUANTO estourou o tempo — travar em `00:00` esconderia essa informação.
+ */
+export async function iniciarCronometroNoHolyrics(
+  minutos: number,
+): Promise<ResultadoHolyrics> {
+  const config = configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  const total = Math.max(0, Math.round(minutos * 60));
+
+  try {
+    // O painel pode ter sobrado com texto de um teste ou de um aviso
+    // anterior. O pedido é "só o tempo" na tela, então limpamos o rótulo do
+    // cronômetro antes de ligá-lo. Falhar aqui não impede o cronômetro: é
+    // cosmético, e derrubar o principal por causa do acessório seria pior.
+    await chamar(config, 'SetCommunicationPanelSettings', {
+      countdown_text: '',
+    }).catch(() => undefined);
+
+    return await chamar(config, 'StartCountdownCommunicationPanel', {
+      minutes: Math.floor(total / 60),
+      seconds: total % 60,
+      stop_at_zero: false,
+    });
+  } catch (erro) {
+    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+  }
+}
+
+/** Desliga o cronômetro do painel. Mesmo contrato das outras. */
+export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
+  const config = configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  try {
+    return await chamar(config, 'StopCountdownCommunicationPanel', {});
+  } catch (erro) {
+    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+  }
+}
+
+/**
+ * Dá mais `minutosExtras` ao bloco em andamento.
+ *
+ * A API não tem "somar tempo": só dá para iniciar um cronômetro do zero. Então
+ * o caminho é ler quanto ainda falta (`GetCommunicationPanelInfo`) e reiniciar
+ * com o total novo — daí o ler-e-reiniciar em vez de uma chamada só.
+ *
+ * O cronômetro pode estar NEGATIVO (o bloco estourou o tempo, e
+ * `stop_at_zero: false` deixa ele seguir contando). Somar em cima do valor
+ * real é o que faz sentido: dar 5 minutos a um bloco que já passou 3 deixa
+ * 2 minutos de fato, não 5.
+ */
+export async function somarTempoAoCronometroNoHolyrics(
+  minutosExtras: number,
+): Promise<ResultadoHolyrics> {
+  const config = configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  const extras = Math.round(minutosExtras * 60);
+
+  try {
+    const info = await lerPainelDoHolyrics(config);
+
+    // Sem cronômetro no ar (nunca ligou, ou pararam): "dar mais X minutos"
+    // vira simplesmente ligar um de X minutos, que é o que quem clicou espera.
+    const restante = info?.countdown_show ? (info.countdown_time ?? 0) : 0;
+    const total = Math.max(0, restante + extras);
+
+    await chamar(config, 'SetCommunicationPanelSettings', {
+      countdown_text: '',
+    }).catch(() => undefined);
+
+    return await chamar(config, 'StartCountdownCommunicationPanel', {
+      minutes: Math.floor(total / 60),
+      seconds: total % 60,
+      stop_at_zero: false,
+    });
+  } catch (erro) {
+    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+  }
+}
+
+/** O que interessa do estado do painel. Campos ausentes = painel sem countdown. */
+interface InfoPainelHolyrics {
+  countdown_show?: boolean;
+  /** Segundos restantes. Negativo quando o tempo já estourou. */
+  countdown_time?: number;
+}
+
+/**
+ * Lê o estado do painel de comunicação. GET, não POST — é a única chamada de
+ * leitura aqui, por isso não passa por `chamar()`.
+ *
+ * Devolve `null` (em vez de lançar) quando não dá para ler: quem chama trata
+ * como "não há cronômetro no ar", que é a leitura conservadora certa.
+ */
+async function lerPainelDoHolyrics(
+  config: ConfigHolyrics,
+): Promise<InfoPainelHolyrics | null> {
+  const endereco = `${config.url}/api/GetCommunicationPanelInfo?token=${encodeURIComponent(config.token)}`;
+  const resposta = await fetch(endereco, {
+    method: 'GET',
+    signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
+    cache: 'no-store',
+  });
+  if (!resposta.ok) return null;
+
+  const dados = (await resposta.json().catch(() => null)) as {
+    status?: string;
+    data?: InfoPainelHolyrics;
+  } | null;
+
+  if (!dados || dados.status !== 'ok') return null;
+  return dados.data ?? null;
+}
+
+/** O que a tela recebe sobre o Holyrics numa resposta de API. */
+export interface HolyricsParaTela {
+  estado: string;
+  motivo?: string;
+}
+
+/**
+ * Converte o resultado para o que a tela precisa saber. `nao-configurado` vira
+ * `null` de propósito: quem nunca ligou a integração não deve ver recado sobre
+ * ela.
+ */
+export function holyricsParaTela(
+  resultado: ResultadoHolyrics,
+): HolyricsParaTela | null {
+  if (resultado.estado === 'nao-configurado') return null;
+  if (resultado.estado === 'enviado') return { estado: 'enviado' };
+  return { estado: resultado.estado, motivo: resultado.motivo };
 }

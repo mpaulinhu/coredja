@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CabecalhoDaTela } from '@/components/CabecalhoDaTela';
+import { Recado } from '@/components/Recado';
 import { hojeLocal, type Culto } from '@/lib/culto';
 
 interface Props {
@@ -11,8 +12,13 @@ interface Props {
   onEditar: (id: string) => void;
   onDuplicar: (id: string) => void;
   onRemover: (id: string) => Promise<void>;
-  onAvancar: () => Promise<void>;
+  /** Devolve um recado a mostrar (ex: cronômetro não foi ao Holyrics), ou null. */
+  onAvancar: () => Promise<string | null>;
   onConcluir: (id: string, concluir: boolean) => Promise<void>;
+  /** Estica o cronômetro do bloco em andamento. Mesmo contrato de `onAvancar`. */
+  onTempoExtra: (minutos: number) => Promise<string | null>;
+  /** Sem Holyrics ligado não há cronômetro, então "+1 min" não aparece. */
+  holyricsLigado: boolean;
 }
 
 /** "domingo, 24 de agosto" — o dia da semana importa mais que o ano aqui. */
@@ -60,9 +66,24 @@ export function ListaCultos({
   onRemover,
   onAvancar,
   onConcluir,
+  onTempoExtra,
+  holyricsLigado,
 }: Props) {
   const [mostrarAnteriores, setMostrarAnteriores] = useState(false);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  const [recado, setRecado] = useState<string | null>(null);
+  /** Trava os botões durante a ida ao servidor: dois "+5" seguidos somariam 10. */
+  const [ocupado, setOcupado] = useState(false);
+
+  async function executar(acao: () => Promise<string | null>) {
+    setOcupado(true);
+    setRecado(null);
+    try {
+      setRecado(await acao());
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   const hoje = hojeLocal();
   const anteriores = cultos.filter((c) => c.data < hoje);
@@ -87,6 +108,8 @@ export function ListaCultos({
           + Nova ordem
         </button>
       </div>
+
+      {recado && <Recado texto={recado} onDispensar={() => setRecado(null)} />}
 
       {cultos.length === 0 && (
         <p className="mt-4 text-sm text-texto-fraco">
@@ -241,13 +264,32 @@ export function ListaCultos({
                             })}
                           </ol>
 
-                          <button
-                            type="button"
-                            onClick={onAvancar}
-                            className="mt-3 h-11 w-full rounded-xl border border-borda text-sm font-medium text-texto-suave hover:text-texto"
-                          >
-                            {culto.blocoAtualId ? 'Avançar →' : 'Começar →'}
-                          </button>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => executar(onAvancar)}
+                              disabled={ocupado}
+                              className="h-11 min-w-0 flex-1 basis-full rounded-xl border border-borda text-sm font-medium text-texto-suave hover:text-texto disabled:opacity-50 sm:basis-0"
+                            >
+                              {culto.blocoAtualId ? 'Avançar →' : 'Começar →'}
+                            </button>
+
+                            {/* Só com Holyrics ligado: sem ele não existe
+                                cronômetro na tela de retorno para esticar. */}
+                            {holyricsLigado &&
+                              [1, 5].map((minutos) => (
+                                <button
+                                  key={minutos}
+                                  type="button"
+                                  onClick={() => executar(() => onTempoExtra(minutos))}
+                                  disabled={ocupado}
+                                  aria-label={`Dar mais ${minutos} minuto${minutos > 1 ? 's' : ''} ao bloco em andamento`}
+                                  className="h-11 flex-1 rounded-xl border border-borda px-3 text-sm font-medium text-texto-suave hover:text-texto disabled:opacity-50 sm:flex-none"
+                                >
+                                  +{minutos} min
+                                </button>
+                              ))}
+                          </div>
                         </div>
                       )}
                     </li>

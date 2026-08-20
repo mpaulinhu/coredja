@@ -1,8 +1,8 @@
 import { avisosStore } from '@/lib/avisos-store';
 import {
   enviarAvisoAoHolyrics,
+  holyricsParaTela as paraTela,
   limparAvisoNoHolyrics,
-  type ResultadoHolyrics,
 } from '@/lib/holyrics';
 import { podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
@@ -66,14 +66,3 @@ export async function DELETE(
   return Response.json({ avisos, holyrics: paraTela(holyrics) });
 }
 
-/**
- * O que a tela precisa saber. `nao-configurado` some da resposta de
- * propósito: quem nunca ligou a integração não deve ver recado sobre ela.
- */
-function paraTela(
-  resultado: ResultadoHolyrics,
-): { estado: string; motivo?: string } | null {
-  if (resultado.estado === 'nao-configurado') return null;
-  if (resultado.estado === 'enviado') return { estado: 'enviado' };
-  return { estado: resultado.estado, motivo: resultado.motivo };
-}

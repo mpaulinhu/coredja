@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { CabecalhoDaTela } from '@/components/CabecalhoDaTela';
+import { Recado } from '@/components/Recado';
 import type { Culto } from '@/lib/culto';
 
 interface Props {
   culto: Culto | null;
-  onAvancar: () => Promise<void>;
+  /** Devolve um recado a mostrar (ex: cronômetro não foi ao Holyrics), ou null. */
+  onAvancar: () => Promise<string | null>;
 }
 
 /**
@@ -21,6 +23,7 @@ interface Props {
  */
 export function ExecucaoCulto({ culto, onAvancar }: Props) {
   const [avancando, setAvancando] = useState(false);
+  const [recado, setRecado] = useState<string | null>(null);
 
   if (!culto) {
     return (
@@ -39,8 +42,9 @@ export function ExecucaoCulto({ culto, onAvancar }: Props) {
 
   async function aoClicarAvancar() {
     setAvancando(true);
+    setRecado(null);
     try {
-      await onAvancar();
+      setRecado(await onAvancar());
     } finally {
       setAvancando(false);
     }
@@ -107,6 +111,8 @@ export function ExecucaoCulto({ culto, onAvancar }: Props) {
               ? 'Encerrar'
               : 'Avançar →'}
       </button>
+
+      {recado && <Recado texto={recado} onDispensar={() => setRecado(null)} />}
     </div>
   );
 }

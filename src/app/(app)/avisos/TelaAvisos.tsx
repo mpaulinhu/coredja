@@ -52,7 +52,7 @@ export function TelaAvisos() {
     (async () => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho || !vivo) return;
-      const resp = await fetch('/api/avisos/holyrics', { headers: cabecalho });
+      const resp = await fetch('/api/holyrics/status', { headers: cabecalho });
       if (!resp.ok || !vivo) return;
       const dados = (await resp.json()) as { configurado?: boolean };
       if (vivo) setHolyricsLigado(dados.configurado === true);
@@ -110,6 +110,37 @@ export function TelaAvisos() {
         parcial
           ? `Publicado no Coredja. ${complemento}`.trim()
           : `Publicado no Coredja, mas não foi possível enviar ao Holyrics. ${complemento}`.trim(),
+      );
+    },
+    [chamar],
+  );
+
+  /** Manda para a fila do Holyrics sem projetar — quem opera decide a hora. */
+  const mandarParaFila = useCallback(
+    async (id: string) => {
+      setRecado(null);
+      const dados = (await chamar(
+        `/api/avisos/${id}/fila`,
+        'POST',
+      )) as RetornoTelao | null;
+      if (!dados) return;
+
+      const holyrics = dados.holyrics;
+      if (!holyrics) return;
+
+      if (holyrics.estado === 'enviado') {
+        setRecado('Audiovisual avisado. Quem opera projeta na hora certa.');
+        return;
+      }
+
+      const complemento = holyrics.motivo ?? '';
+      const parcial =
+        holyrics.estado === 'nao-suportado' ||
+        holyrics.estado === 'enviado-sem-imagem';
+      setRecado(
+        parcial
+          ? `Audiovisual avisado. ${complemento}`.trim()
+          : `Não foi possível enviar ao Holyrics. ${complemento}`.trim(),
       );
     },
     [chamar],
@@ -239,7 +270,19 @@ export function TelaAvisos() {
                 </p>
               )}
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
+                {/* Avisar vem primeiro: é o caminho normal (quem opera projeta
+                    quando couber). Projetar na tela de retorno é imediato,
+                    então fica ao lado, não no lugar. */}
+                {holyricsLigado && !soImagem && (
+                  <button
+                    type="button"
+                    onClick={() => mandarParaFila(aviso.id)}
+                    className="h-10 flex-1 rounded-lg border border-borda-forte text-sm font-semibold text-texto hover:bg-borda"
+                  >
+                    Avisar audiovisual
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => mexerNoTelao(aviso.id, !aviso.noAr)}
@@ -249,7 +292,11 @@ export function TelaAvisos() {
                     color: aviso.noAr ? 'var(--texto)' : 'var(--acento-texto)',
                   }}
                 >
-                  {aviso.noAr ? 'Tirar do telão' : 'Publicar no telão'}
+                  {aviso.noAr
+                    ? 'Tirar da tela de retorno'
+                    : holyricsLigado
+                      ? 'Projetar tela de retorno'
+                      : 'Publicar no telão'}
                 </button>
                 <button
                   type="button"
