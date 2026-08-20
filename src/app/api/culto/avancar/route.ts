@@ -1,10 +1,6 @@
+import { ajustarCronometroDoBloco } from '@/lib/culto-cronometro';
 import { cultoStore } from '@/lib/culto-store';
-import {
-  holyricsParaTela,
-  iniciarCronometroNoHolyrics,
-  pararCronometroNoHolyrics,
-  type ResultadoHolyrics,
-} from '@/lib/holyrics';
+import { holyricsParaTela } from '@/lib/holyrics';
 import { podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 
@@ -18,15 +14,18 @@ export const dynamic = 'force-dynamic';
  * `culto:avancar` já é herdada por Líder (e Admin acima), então checar só
  * ela cobre todo mundo que antes precisava do OR com `culto:escrever`.
  *
- * Não recebe qual ordem avançar: opera sempre sobre a ativa (a de hoje, senão
- * a próxima futura). É o caso de uso real — no domingo se avança o culto do
- * dia — e evita que um cliente desatualizado empurre o culto errado.
+ * Sem corpo, opera sobre a ativa (a de hoje, senão a próxima futura) — é o
+ * caso do operador no domingo, que não escolhe qual culto está acontecendo.
+ * Com `cultoId` no corpo, opera sobre aquela ordem: a tela de operação deixa
+ * um líder abrir um culto específico (um ensaio, o da noite antes da hora), e
+ * aí avançar precisa mexer no que ele está vendo, não no que o relógio elegeu.
  *
  * Avançar também joga o tempo do bloco novo no cronômetro do Holyrics, para
- * quem está no palco ver quanto falta. Mesma regra de `avisos/[id]/telao`: o
- * avanço é gravado primeiro e nunca é desfeito por causa do Holyrics — se ele
- * estiver fechado, o culto anda igual e a resposta carrega `holyrics` para a
- * tela contar o que não deu certo.
+ * quem está no palco ver quanto falta (ver `culto-cronometro.ts`, comum a
+ * esta rota e à de pular direto para um bloco). Mesma regra de
+ * `avisos/[id]/telao`: o avanço é gravado primeiro e nunca é desfeito por
+ * causa do Holyrics — se ele estiver fechado, o culto anda igual e a resposta
+ * carrega `holyrics` para a tela contar o que não deu certo.
  */
 export async function POST(request: Request) {
   const pessoa = await pessoaDaRequisicao(request);
@@ -40,39 +39,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const ativa = await cultoStore.buscarAtiva();
-  if (!ativa) {
+  // Corpo é opcional: o operador manda POST vazio e ganha a ordem ativa.
+  const corpo = (await request.json().catch(() => null)) as { cultoId?: unknown } | null;
+  const pedido = typeof corpo?.cultoId === 'string' ? corpo.cultoId : null;
+
+  const alvo = pedido ? await cultoStore.buscar(pedido) : await cultoStore.buscarAtiva();
+  if (!alvo) {
     return Response.json({ erro: 'Nenhum culto montado ainda.' }, { status: 404 });
   }
 
-  const culto = await cultoStore.avancar(ativa.id);
-  const holyrics = culto ? await ajustarCronometro(culto.blocoAtualId, culto.blocos) : null;
+  const culto = await cultoStore.avancar(alvo.id);
+  const holyrics = culto
+    ? await ajustarCronometroDoBloco(culto.blocoAtualId, culto.blocos)
+    : null;
 
   return Response.json({
     culto,
     holyrics: holyrics ? holyricsParaTela(holyrics) : null,
   });
-}
-
-/**
- * Põe o cronômetro no tempo do bloco que passou a ser o atual.
- *
- * Dois casos que não são erro e por isso não viram cronômetro novo:
- * - **Acabou o culto** (`blocoAtualId` volta a `null` depois do último bloco,
- *   ver `culto-store.avancar`): o certo é PARAR, senão o cronômetro do último
- *   bloco fica correndo negativo para sempre na tela de retorno.
- * - **Bloco sem minutos** (`0` ou ausente): cronometrar zero não significa
- *   nada. Deixa como está, sem tratar como falha.
- */
-async function ajustarCronometro(
-  blocoAtualId: string | null,
-  blocos: { id: string; minutos: number }[],
-): Promise<ResultadoHolyrics | null> {
-  if (blocoAtualId === null) return pararCronometroNoHolyrics();
-
-  const bloco = blocos.find((b) => b.id === blocoAtualId);
-  const minutos = bloco?.minutos ?? 0;
-  if (minutos <= 0) return null;
-
-  return iniciarCronometroNoHolyrics(minutos);
 }

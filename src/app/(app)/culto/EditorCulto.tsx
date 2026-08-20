@@ -2,8 +2,17 @@
 
 import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
-import { CabecalhoDaTela } from '@/components/CabecalhoDaTela';
-import { idDoCulto, type Bloco, type Culto, type ModeloCulto } from '@/lib/culto';
+import { BotaoPrincipal, BotaoSecundario, Numero, Rotulo } from '@/components/Interface';
+import {
+  idDoCulto,
+  statusDoCulto,
+  terminoPrevisto,
+  totalDeMinutos,
+  type Bloco,
+  type Culto,
+  type ModeloCulto,
+  type StatusCulto,
+} from '@/lib/culto';
 
 /** Distância (px) que o dedo pode se mover antes do timer de long-press
  * completar. Passou disso = é scroll, não intenção de arrastar — cancela o
@@ -42,6 +51,7 @@ interface Props {
     data: string,
     hora: string,
     blocos: Bloco[],
+    status: StatusCulto,
     idAnterior?: string,
   ) => Promise<{ ok: true } | { ok: false; erro: string }>;
   onVoltar: () => void;
@@ -58,7 +68,7 @@ function proximoDomingo(): string {
 }
 
 function novoBloco(): Bloco {
-  return { id: crypto.randomUUID(), titulo: '', minutos: 10 };
+  return { id: crypto.randomUUID(), titulo: '', minutos: 10, responsavel: '' };
 }
 
 /**
@@ -90,6 +100,14 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
   const [hora, setHora] = useState(culto?.hora ?? '09:00');
   const [blocos, setBlocos] = useState<Bloco[]>(
     culto?.blocos.length ? culto.blocos : blocosIniciais?.length ? blocosIniciais : [novoBloco()],
+  );
+  // Ordem NOVA nasce como rascunho: o estado real de uma ordem que acabou de
+  // ser aberta é "estou montando", e nascer "pronta" faria um esboço entrar
+  // na disputa por "ordem ativa" no instante do primeiro salvamento (ver
+  // `culto.ts`). Ordem existente mantém o que já tem — reeditar uma ordem
+  // pronta não pode rebaixá-la sozinho.
+  const [status, setStatus] = useState<StatusCulto>(
+    culto ? statusDoCulto(culto) : 'rascunho',
   );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -142,7 +160,11 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
     };
   }, []);
 
-  function atualizarBloco(id: string, campo: 'titulo' | 'minutos', valor: string) {
+  function atualizarBloco(
+    id: string,
+    campo: 'titulo' | 'minutos' | 'responsavel',
+    valor: string,
+  ) {
     setSalvo(false);
     setBlocos((atuais) =>
       atuais.map((b) =>
@@ -412,7 +434,11 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
 
   async function salvar() {
     const preenchidos = blocos
-      .map((b) => ({ ...b, titulo: b.titulo.trim() }))
+      .map((b) => ({
+        ...b,
+        titulo: b.titulo.trim(),
+        responsavel: b.responsavel?.trim() ?? '',
+      }))
       .filter((b) => b.titulo);
 
     if (preenchidos.length === 0) {
@@ -425,7 +451,7 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
     // `culto.id` vai junto para o servidor saber que é uma ordem existente
     // mudando de data/hora — nesse caso ele move, em vez de deixar a antiga
     // para trás.
-    const resultado = await onSalvar(data, hora, preenchidos, culto?.id);
+    const resultado = await onSalvar(data, hora, preenchidos, status, culto?.id);
     setSalvando(false);
 
     if (resultado.ok) {
@@ -436,7 +462,7 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
     }
   }
 
-  const totalMinutos = blocos.reduce((soma, b) => soma + (b.minutos || 0), 0);
+  const totalMinutos = totalDeMinutos(blocos);
   const emAndamento = culto?.blocoAtualId != null;
   // Só é conflito se a data+hora escolhida for de OUTRA ordem: reeditar o
   // próprio horário da ordem aberta é o comportamento normal, não uma
@@ -454,22 +480,29 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
         ← Todas as ordens
       </button>
 
-      <div className="mt-3">
-        <CabecalhoDaTela
-          titulo={culto ? 'Editar ordem' : 'Nova ordem'}
-          instrucao="Monte a sequência. Quem estiver no domingo vê isto se atualizar sozinho."
-        />
-      </div>
+      <header className="mt-3">
+        <Rotulo>{culto ? 'Editando' : 'Nova'}</Rotulo>
+        <h1 className="mt-2 text-3xl leading-[1.05] font-extrabold tracking-[-0.03em] text-texto sm:text-[40px]">
+          {culto ? 'Editar ordem' : 'Nova ordem'}
+        </h1>
+        <p className="mt-2 max-w-xl text-sm text-texto-suave">
+          Monte a sequência e diga quem conduz cada bloco. Quem estiver
+          operando no domingo vê isto se atualizar sozinho.
+        </p>
+      </header>
 
+      {/* "Começar de um modelo" saiu daqui: virou o botão "Modelos" do topo
+          da lista, com tela própria (`BibliotecaModelos`), seguindo a tela de
+          referência. O atalho continua existindo para quem já está no editor
+          com a ordem em branco. */}
       {!culto && (
-        <div className="mt-3 flex justify-center">
-          <button
-            type="button"
+        <div className="mt-4 flex justify-center">
+          <BotaoSecundario
             onClick={() => setMostrarModelos((v) => !v)}
-            className="h-10 rounded-lg border border-borda px-3 text-sm text-texto-suave hover:text-texto"
+            className="text-sm"
           >
             Começar de um modelo
-          </button>
+          </BotaoSecundario>
         </div>
       )}
 
@@ -556,9 +589,15 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
-          <span className="text-sm text-texto-suave">Blocos</span>
-          <span className="text-xs text-texto-fraco">{totalMinutos} min ao todo</span>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+          <Rotulo>Blocos</Rotulo>
+          {/* O término previsto aqui é o mesmo cálculo que a tela de operação
+              mostra no topo do roteiro — ver `terminoPrevisto`. Aparece já na
+              montagem porque "a que horas isso acaba?" é a pergunta que faz
+              alguém cortar cinco minutos de um bloco antes de publicar. */}
+          <Numero className="text-xs text-texto-fraco">
+            {totalMinutos} min ao todo · termina {terminoPrevisto({ hora, blocos })}
+          </Numero>
         </div>
 
         <ul ref={refLista} className="relative mt-2 flex flex-col gap-2">
@@ -578,7 +617,7 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
                 // O bloco arrastado vira só um "buraco" no lugar de onde
                 // saiu (opacidade baixa) — quem representa ele visualmente
                 // agora é o clone fixo renderizado depois da lista.
-                className={`flex items-center gap-2 rounded-xl border bg-fundo-cartao px-3 py-2 select-none ${
+                className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border bg-fundo-cartao px-3 py-2.5 select-none ${
                   estaArrastando ? 'border-borda opacity-30' : 'border-borda'
                 } ${estaArmandoTouch ? 'border-[var(--acento)]' : ''}`}
                 onMouseDown={(e) => aoPressionarMouse(e, bloco.id)}
@@ -598,8 +637,24 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
                   value={bloco.titulo}
                   onChange={(e) => atualizarBloco(bloco.id, 'titulo', e.target.value)}
                   onMouseDown={(e) => e.stopPropagation()}
+                  aria-label="Nome do bloco"
                   placeholder="Ex: Louvor"
-                  className="min-w-0 flex-1 bg-transparent text-[16px] text-texto placeholder:text-texto-fraco focus:outline-none"
+                  className="min-w-32 flex-1 bg-transparent text-[16px] text-texto placeholder:text-texto-fraco focus:outline-none"
+                />
+
+                {/* Responsável: texto livre de propósito — metade dos nomes
+                    reais ("Ana + banda", "quem estiver na escala") não são
+                    pessoas cadastradas, e um seletor obrigaria a criar
+                    cadastro só para escrever uma linha. Ver `Bloco`. */}
+                <input
+                  value={bloco.responsavel ?? ''}
+                  onChange={(e) =>
+                    atualizarBloco(bloco.id, 'responsavel', e.target.value)
+                  }
+                  onMouseDown={(e) => e.stopPropagation()}
+                  aria-label="Quem conduz este bloco"
+                  placeholder="Quem conduz"
+                  className="min-w-28 flex-1 rounded-lg border border-borda bg-fundo px-2.5 py-1.5 text-sm text-texto placeholder:text-texto-fraco focus:outline-none"
                 />
 
                 <input
@@ -609,7 +664,7 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
                   onChange={(e) => atualizarBloco(bloco.id, 'minutos', e.target.value)}
                   onMouseDown={(e) => e.stopPropagation()}
                   aria-label="Minutos"
-                  className="w-14 rounded-lg border border-borda bg-fundo px-2 py-1 text-right text-sm text-texto"
+                  className="numero w-14 rounded-lg border border-borda bg-fundo px-2 py-1.5 text-right text-sm text-texto"
                 />
                 <span className="text-xs text-texto-fraco">min</span>
 
@@ -648,7 +703,7 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
               <span className="min-w-0 flex-1 truncate text-[16px] text-texto">
                 {bloco.titulo || 'Sem título'}
               </span>
-              <span className="text-xs text-texto-fraco">{bloco.minutos} min</span>
+              <Numero className="text-xs text-texto-fraco">{bloco.minutos} min</Numero>
             </div>
           );
         })()}
@@ -688,24 +743,79 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
         </div>
       </div>
 
+      {/* Rascunho x Pronta: a única coisa que o status governa é se a ordem
+          pode ser eleita "ativa" pelo relógio (ver `culto.ts`). Por isso o
+          seletor explica o efeito em vez de só nomear os dois estados —
+          "rascunho" sozinho não diz o que muda. */}
+      <fieldset className="mx-auto mt-4 max-w-3xl rounded-2xl border border-borda bg-fundo-elevado p-5">
+        <legend className="px-1">
+          <Rotulo>Estado desta ordem</Rotulo>
+        </legend>
+
+        <div className="mt-1 flex flex-col gap-2.5 sm:flex-row">
+          {(
+            [
+              {
+                valor: 'rascunho' as const,
+                titulo: 'Rascunho',
+                texto: 'Ainda montando. Não entra no ar sozinha no horário dela.',
+              },
+              {
+                valor: 'pronta' as const,
+                titulo: 'Pronta',
+                texto: 'Pode assumir o culto sozinha quando chegar a hora.',
+              },
+            ]
+          ).map((opcao) => {
+            const escolhida = status === opcao.valor;
+            return (
+              <label
+                key={opcao.valor}
+                className="flex flex-1 cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors"
+                style={{
+                  borderColor: escolhida ? 'var(--acento-suave-borda)' : 'var(--borda)',
+                  background: escolhida
+                    ? 'var(--acento-suave-fundo)'
+                    : 'var(--fundo-cartao)',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="status-da-ordem"
+                  value={opcao.valor}
+                  checked={escolhida}
+                  onChange={() => {
+                    setStatus(opcao.valor);
+                    setSalvo(false);
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--acento)]"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-texto">
+                    {opcao.titulo}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-texto-suave">
+                    {opcao.texto}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
       <div className="mx-auto mt-4 flex max-w-3xl flex-col gap-3 sm:flex-row">
-        <button
-          type="button"
+        <BotaoPrincipal
           onClick={salvar}
           disabled={salvando}
-          className="h-14 flex-1 rounded-xl text-base font-bold disabled:opacity-60"
-          style={{ background: 'var(--acento)', color: 'var(--acento-texto)' }}
+          className="h-14 flex-1 text-base"
         >
-          {salvando ? 'Salvando…' : salvo ? 'Salvo ✓' : 'Publicar'}
-        </button>
+          {salvando ? 'Salvando…' : salvo ? 'Salvo ✓' : 'Salvar ordem'}
+        </BotaoPrincipal>
 
-        <button
-          type="button"
-          onClick={onVoltar}
-          className="h-14 rounded-xl border border-borda px-5 text-sm font-medium text-texto-suave hover:text-texto"
-        >
-          Concluir
-        </button>
+        <BotaoSecundario onClick={onVoltar} className="h-14 text-sm">
+          Voltar
+        </BotaoSecundario>
       </div>
     </div>
   );

@@ -72,6 +72,24 @@ export function IconeDepartamentos({ className }: Props) {
   );
 }
 
+/**
+ * Ponto cheio com duas ondas saindo — o "ao vivo" que o YouTube e o
+ * Instagram já usam. Deliberadamente diferente do `IconeAvisos` (que é um
+ * alto-falante): os dois falam de "transmitir", e no menu eles ficam perto um
+ * do outro, então precisam ser distinguíveis de relance.
+ */
+export function IconeAoVivo({ className }: Props) {
+  return (
+    <svg {...comum} className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+      <path d="M7.8 7.8a6 6 0 0 0 0 8.4" />
+      <path d="M16.2 16.2a6 6 0 0 0 0-8.4" />
+      <path d="M4.9 4.9a10 10 0 0 0 0 14.2" />
+      <path d="M19.1 19.1a10 10 0 0 0 0-14.2" />
+    </svg>
+  );
+}
+
 /** Três traços — abre o menu no celular. */
 export function IconeMenuHamburguer({ className }: Props) {
   return (

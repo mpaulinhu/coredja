@@ -3,6 +3,7 @@ import {
   hojeLocal,
   horaLocal,
   idDoCulto,
+  statusDoCulto,
   type Bloco,
   type Culto,
   type ModeloCulto,
@@ -67,7 +68,13 @@ export const cultoStore: StoreCulto = {
     const hoje = hojeLocal();
     const agora = horaLocal();
 
-    const lista = await todos();
+    // Rascunho fica de fora da eleição automática: é uma ordem ainda sendo
+    // montada (blocos pela metade, tempos chutados), e deixá-la concorrer
+    // faria um esboço do culto de quarta roubar o posto de "no ar agora" do
+    // domingo. Ver `Culto.status`. Continua operável se alguém abrir pela
+    // lista de propósito — o que muda é só quem escolhe: o relógio ou uma
+    // pessoa.
+    const lista = (await todos()).filter((c) => statusDoCulto(c) !== 'rascunho');
     const deHoje = lista.filter((c) => c.data === hoje && !c.concluidoEm);
 
     if (deHoje.length > 0) {
@@ -99,8 +106,16 @@ export const cultoStore: StoreCulto = {
       blocos: dados.blocos,
       // Uma edição nova sempre reinicia a execução: o que estava "em
       // andamento" pertencia à sequência antiga, que pode ter mudado de
-      // ordem ou perdido blocos.
+      // ordem ou perdido blocos. Os campos de cronômetro descrevem esse
+      // mesmo "em andamento", então zeram junto — deixar um
+      // `blocoIniciadoEm` de uma sequência que não existe mais faria o
+      // cronômetro nascer contando um tempo sem dono.
       blocoAtualId: null,
+      blocoIniciadoEm: null,
+      pausadoEm: null,
+      segundosAcumulados: 0,
+      minutosExtras: 0,
+      status: dados.status ?? 'pronta',
       concluidoEm: null,
       editadoPor: autor,
       editadoEm: new Date().toISOString(),
@@ -123,7 +138,23 @@ export const cultoStore: StoreCulto = {
     const proximo: Bloco | undefined =
       indiceAtual === -1 ? culto.blocos[0] : culto.blocos[indiceAtual + 1];
 
-    const atualizado: Culto = { ...culto, blocoAtualId: proximo?.id ?? null };
+    const atualizado: Culto = { ...culto, ...trocarDeBloco(proximo?.id ?? null) };
+    await ref.set(atualizado);
+    return atualizado;
+  },
+
+  async definirBlocoAtual(id: string, blocoId: string) {
+    const ref = colecao().doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) return null;
+    const culto = { ...(doc.data() as Culto), id: doc.id };
+
+    // Bloco de outra ordem (ou de uma sequência que foi reescrita depois que
+    // a tela carregou) não pode virar o atual: gravaria um `blocoAtualId` que
+    // não existe em `blocos`, e a tela leria isso como "culto encerrado".
+    if (!culto.blocos.some((b) => b.id === blocoId)) return null;
+
+    const atualizado: Culto = { ...culto, ...trocarDeBloco(blocoId) };
     await ref.set(atualizado);
     return atualizado;
   },
@@ -134,7 +165,7 @@ export const cultoStore: StoreCulto = {
     if (!doc.exists) return null;
     const culto = { ...(doc.data() as Culto), id: doc.id };
 
-    const atualizado: Culto = { ...culto, blocoAtualId: null };
+    const atualizado: Culto = { ...culto, ...trocarDeBloco(null) };
     await ref.set(atualizado);
     return atualizado;
   },
@@ -149,6 +180,64 @@ export const cultoStore: StoreCulto = {
       ...culto,
       concluidoEm: concluir ? new Date().toISOString() : null,
     };
+    await ref.set(atualizado);
+    return atualizado;
+  },
+
+  async pausar(id: string, pausar: boolean) {
+    const ref = colecao().doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) return null;
+    const culto = { ...(doc.data() as Culto), id: doc.id };
+
+    const jaPausado = Boolean(culto.pausadoEm);
+    // Clicar duas vezes (ou de dois aparelhos ao mesmo tempo) não pode
+    // reprocessar: pausar o já-pausado zeraria o acumulado de novo a partir
+    // do instante da segunda pausa, perdendo o tempo real do bloco.
+    if (jaPausado === pausar) return culto;
+
+    const agora = new Date();
+
+    if (pausar) {
+      // Congela: o que já correu vira acumulado, e o relógio de referência
+      // some. Ver `decorridoDoBlocoEmSegundos`.
+      const acumulado = Number(culto.segundosAcumulados);
+      const base = Number.isFinite(acumulado) && acumulado > 0 ? acumulado : 0;
+      const inicio = culto.blocoIniciadoEm ? Date.parse(culto.blocoIniciadoEm) : NaN;
+      const correu = Number.isFinite(inicio)
+        ? Math.max(0, Math.floor((agora.getTime() - inicio) / 1000))
+        : 0;
+
+      const atualizado: Culto = {
+        ...culto,
+        pausadoEm: agora.toISOString(),
+        segundosAcumulados: base + correu,
+      };
+      await ref.set(atualizado);
+      return atualizado;
+    }
+
+    // Retoma: o acumulado fica como está e o relógio recomeça de agora —
+    // o tempo que a pausa durou simplesmente não conta.
+    const atualizado: Culto = {
+      ...culto,
+      pausadoEm: null,
+      blocoIniciadoEm: agora.toISOString(),
+    };
+    await ref.set(atualizado);
+    return atualizado;
+  },
+
+  async darTempoExtra(id: string, minutos: number) {
+    const ref = colecao().doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) return null;
+    const culto = { ...(doc.data() as Culto), id: doc.id };
+
+    const atuais = Number(culto.minutosExtras);
+    const base = Number.isFinite(atuais) && atuais > 0 ? atuais : 0;
+
+    const atualizado: Culto = { ...culto, minutosExtras: base + minutos };
     await ref.set(atualizado);
     return atualizado;
   },
@@ -183,4 +272,33 @@ function distanciaMinutos(a: string, b: string): number {
   const [ha, ma] = a.split(':').map(Number);
   const [hb, mb] = b.split(':').map(Number);
   return Math.abs(ha * 60 + ma - (hb * 60 + mb));
+}
+
+/**
+ * Os campos de execução que TODA troca de bloco tem que reescrever juntos.
+ *
+ * São quatro, e esquecer um deixa o cronômetro mentindo de um jeito
+ * diferente: sem `blocoIniciadoEm` novo ele conta o tempo do bloco anterior;
+ * sem zerar `segundosAcumulados` ele nasce já com o acumulado do anterior;
+ * sem limpar `pausadoEm` o bloco novo nasce congelado; sem zerar
+ * `minutosExtras` o "+5 min" dado ao louvor vale também para a pregação.
+ *
+ * Existe como função porque três métodos trocam de bloco (`avancar`,
+ * `definirBlocoAtual`, `reiniciar`) — deixar os quatro campos soltos em cada
+ * um é exatamente o tipo de coisa que diverge na primeira alteração futura.
+ *
+ * `blocoIniciadoEm` é `null` quando não há bloco (culto reiniciado ou
+ * encerrado): sem bloco não há o que cronometrar.
+ */
+function trocarDeBloco(blocoId: string | null): Pick<
+  Culto,
+  'blocoAtualId' | 'blocoIniciadoEm' | 'pausadoEm' | 'segundosAcumulados' | 'minutosExtras'
+> {
+  return {
+    blocoAtualId: blocoId,
+    blocoIniciadoEm: blocoId ? new Date().toISOString() : null,
+    pausadoEm: null,
+    segundosAcumulados: 0,
+    minutosExtras: 0,
+  };
 }

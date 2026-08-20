@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
 import {
+  IconeAoVivo,
   IconeAvisos,
   IconeCulto,
   IconeDepartamentos,
@@ -12,6 +13,7 @@ import {
   IconeRecados,
   IconeUsuarios,
 } from './IconesMenu';
+import { EquipeDeHoje } from './EquipeDeHoje';
 
 /**
  * Menu lateral do Coredja.
@@ -44,6 +46,12 @@ const ITENS: ItemDeMenu[] = [
   { href: '/painel', rotulo: 'Recados', Icone: IconeRecados },
   { href: '/culto', rotulo: 'Ordem do Culto', Icone: IconeCulto },
   { href: '/avisos', rotulo: 'Avisos do Telão', Icone: IconeAvisos },
+  // Logo abaixo de Avisos do Telão: são os dois itens do domingo em que
+  // alguém pega um texto pronto e o publica em algum lugar — um no telão da
+  // igreja, outro no chat da transmissão. Visível a todo mundo logado, e não
+  // só a quem cadastra, porque copiar é o uso principal da tela e não exige
+  // permissão nenhuma.
+  { href: '/ao-vivo', rotulo: 'Ao Vivo', Icone: IconeAoVivo },
   // Escala do Time oculta: a igreja já usa o Voluts para isso (19/08/2026).
   // O código continua em src/app/(app)/escala/ e src/lib/escala*.ts, caso
   // um dia volte a fazer sentido — só a entrada de menu foi removida.
@@ -185,8 +193,16 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
           })}
         </ul>
 
-        <div className="mt-auto px-5 py-5 text-xs text-texto-fraco">
-          <Link href="/" className="hover:text-texto-suave">
+        {/* Rodapé: quem está em cada função hoje, derivado dos responsáveis
+            dos blocos da ordem ativa (ver `EquipeDeHoje`). Fica aqui, e não
+            só na tela do culto, porque é a informação que alguém procura no
+            domingo estando em qualquer tela. */}
+        <div className="mt-auto flex flex-col gap-4 px-4 py-5">
+          <EquipeDeHoje />
+          <Link
+            href="/"
+            className="px-1 text-xs text-texto-fraco hover:text-texto-suave"
+          >
             ← Voltar para a home
           </Link>
         </div>

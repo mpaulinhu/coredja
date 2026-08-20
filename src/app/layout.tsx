@@ -50,6 +50,27 @@ export default function RootLayout({
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
+        {/* Manrope (texto) e JetBrains Mono (números) — as duas fontes da
+            tela de referência da Ordem do Culto, aplicadas ao app inteiro
+            via `--font-sans`/`--font-mono` em `globals.css`.
+
+            Por `<link>` e não `next/font`: `next/font` injeta a classe da
+            fonte no elemento que a usa, e o `<html>` daqui já é gerenciado
+            por um script inline (o `data-tema` acima) — misturar os dois
+            geraria divergência de hidratação no mesmo elemento. O
+            `preconnect` cobre o custo de handshake que o `next/font`
+            eliminaria. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font --
+            A regra avisa que uma fonte declarada fora de `pages/_document.js`
+            carregaria só numa página. Isso vale para o Pages Router; aqui é o
+            root layout do App Router, que é justamente o equivalente do
+            `_document` — o <link> vale para o app inteiro. Falso positivo. */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body>{children}</body>
     </html>

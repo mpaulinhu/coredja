@@ -3,8 +3,16 @@
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
-import { hojeLocal, horaLocal, type Bloco, type Culto } from '@/lib/culto';
+import {
+  hojeLocal,
+  horaLocal,
+  statusDoCulto,
+  type Bloco,
+  type Culto,
+  type StatusCulto,
+} from '@/lib/culto';
 import { getFirestoreCliente } from '@/lib/firebase-cliente';
+import { BibliotecaModelos } from './BibliotecaModelos';
 import { EditorCulto } from './EditorCulto';
 import { ExecucaoCulto } from './ExecucaoCulto';
 import { ListaCultos } from './ListaCultos';
@@ -47,8 +55,10 @@ export function TelaCulto() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   /** Blocos vindos de "Duplicar", para pré-preencher uma ordem nova. */
   const [blocosParaDuplicar, setBlocosParaDuplicar] = useState<Bloco[] | null>(null);
-  /** Se o servidor fala com o Holyrics — sem isso, "+1 min" não teria efeito. */
-  const [holyricsLigado, setHolyricsLigado] = useState(false);
+  /** id da ordem aberta em tela cheia para operar ao vivo. null = não está operando. */
+  const [operandoId, setOperandoId] = useState<string | null>(null);
+  /** Biblioteca de modelos aberta — o botão "Modelos" do topo da lista. */
+  const [vendoModelos, setVendoModelos] = useState(false);
 
   useEffect(() => {
     const db = getFirestoreCliente();
@@ -88,32 +98,21 @@ export function TelaCulto() {
     })();
   }, []);
 
-  useEffect(() => {
-    let vivo = true;
-    (async () => {
-      const cabecalho = await cabecalhoDeAutorizacao();
-      if (!cabecalho || !vivo) return;
-      const resp = await fetch('/api/holyrics/status', { headers: cabecalho });
-      if (!resp.ok || !vivo) return;
-      const dados = (await resp.json()) as { configurado?: boolean };
-      if (vivo) setHolyricsLigado(dados.configurado === true);
-    })().catch(() => {
-      // Integração é opcional: não saber se está ligada não quebra a tela.
-    });
-    return () => {
-      vivo = false;
-    };
-  }, []);
-
   const salvar = useCallback(
-    async (data: string, hora: string, blocos: Bloco[], idAnterior?: string) => {
+    async (
+      data: string,
+      hora: string,
+      blocos: Bloco[],
+      status: StatusCulto,
+      idAnterior?: string,
+    ) => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return { ok: false as const, erro: 'Sessão expirada.' };
 
       const resp = await fetch('/api/culto', {
         method: 'PUT',
         headers: { ...cabecalho, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data, hora, blocos, idAnterior }),
+        body: JSON.stringify({ data, hora, blocos, status, idAnterior }),
       });
       const corpo = await resp.json();
       if (!resp.ok) return { ok: false as const, erro: corpo.erro ?? 'Falha ao salvar.' };
@@ -138,11 +137,18 @@ export function TelaCulto() {
    * Avançar bloco. Devolve o recado sobre o Holyrics (ou `null`) para a tela
    * mostrar — o avanço em si já aconteceu no servidor de qualquer jeito, ver
    * `api/culto/avancar/route.ts`.
+   *
+   * Sem `cultoId` o servidor avança a ordem ATIVA — é o caso do operador, que
+   * não escolhe qual culto está no ar. Com id, avança a que a pessoa abriu.
    */
-  const avancar = useCallback(async (): Promise<string | null> => {
+  const avancar = useCallback(async (cultoId?: string): Promise<string | null> => {
     const cabecalho = await cabecalhoDeAutorizacao();
     if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
-    const resp = await fetch('/api/culto/avancar', { method: 'POST', headers: cabecalho });
+    const resp = await fetch('/api/culto/avancar', {
+      method: 'POST',
+      headers: { ...cabecalho, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cultoId ? { cultoId } : {}),
+    });
     const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
     if (!resp.ok) return corpo?.erro ?? 'Não foi possível avançar.';
 
@@ -151,24 +157,77 @@ export function TelaCulto() {
     return `Bloco avançado, mas o cronômetro não foi ao Holyrics. ${holyrics.motivo ?? ''}`.trim();
   }, []);
 
-  /** Estica o cronômetro do bloco em andamento, sem mexer na ordem montada. */
-  const tempoExtra = useCallback(async (minutos: number): Promise<string | null> => {
-    const cabecalho = await cabecalhoDeAutorizacao();
-    if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
-    const resp = await fetch('/api/culto/tempo-extra', {
-      method: 'POST',
-      headers: { ...cabecalho, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ minutos }),
-    });
-    const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
-    if (!resp.ok) return corpo?.erro ?? 'Não foi possível dar mais tempo.';
+  /** Pula direto para um bloco (adiante ou de volta). Mesmo contrato de `avancar`. */
+  const irParaBloco = useCallback(
+    async (cultoId: string, blocoId: string): Promise<string | null> => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
+      const resp = await fetch('/api/culto/bloco', {
+        method: 'POST',
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cultoId, blocoId }),
+      });
+      const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
+      if (!resp.ok) return corpo?.erro ?? 'Não foi possível mudar o bloco.';
 
-    const holyrics = corpo?.holyrics;
-    if (!holyrics || holyrics.estado === 'enviado') {
-      return `Mais ${minutos} min no cronômetro.`;
-    }
-    return `Não foi possível falar com o Holyrics. ${holyrics.motivo ?? ''}`.trim();
-  }, []);
+      const holyrics = corpo?.holyrics;
+      if (!holyrics || holyrics.estado === 'enviado') return null;
+      return `Bloco trocado, mas o cronômetro não foi ao Holyrics. ${holyrics.motivo ?? ''}`.trim();
+    },
+    [],
+  );
+
+  /**
+   * Estica o cronômetro do bloco em andamento, sem mexer na ordem montada.
+   *
+   * Grava em `minutosExtras` (não em `bloco.minutos`) e manda o mesmo tempo
+   * ao Holyrics — ver `api/culto/tempo-extra`.
+   */
+  const tempoExtra = useCallback(
+    async (minutos: number, cultoId?: string): Promise<string | null> => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
+      const resp = await fetch('/api/culto/tempo-extra', {
+        method: 'POST',
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
+        body: JSON.stringify(cultoId ? { minutos, cultoId } : { minutos }),
+      });
+      const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
+      if (!resp.ok) return corpo?.erro ?? 'Não foi possível dar mais tempo.';
+
+      const holyrics = corpo?.holyrics;
+      // Sem Holyrics configurado não há erro a relatar: o cronômetro da
+      // própria tela já recebeu os minutos, que é o efeito principal agora.
+      // `holyricsParaTela` devolve null quando a integração nem está
+      // configurada, então cair aqui significa erro de verdade.
+      if (!holyrics || holyrics.estado === 'enviado') return null;
+      return `Mais ${minutos} min na tela, mas o Holyrics não recebeu. ${holyrics.motivo ?? ''}`.trim();
+    },
+    [],
+  );
+
+  /** Pausa ou retoma o cronômetro (na tela e no Holyrics). */
+  const pausar = useCallback(
+    async (pausarAgora: boolean, cultoId?: string): Promise<string | null> => {
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
+      const resp = await fetch('/api/culto/pausar', {
+        method: 'POST',
+        headers: { ...cabecalho, 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          cultoId ? { pausar: pausarAgora, cultoId } : { pausar: pausarAgora },
+        ),
+      });
+      const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
+      if (!resp.ok) return corpo?.erro ?? 'Não foi possível pausar.';
+
+      const holyrics = corpo?.holyrics;
+      if (!holyrics || holyrics.estado === 'enviado') return null;
+      const gesto = pausarAgora ? 'Pausado' : 'Retomado';
+      return `${gesto} aqui, mas o Holyrics não acompanhou. ${holyrics.motivo ?? ''}`.trim();
+    },
+    [],
+  );
 
   const concluir = useCallback(async (id: string, concluirAgora: boolean) => {
     const cabecalho = await cabecalhoDeAutorizacao();
@@ -179,6 +238,22 @@ export function TelaCulto() {
       body: JSON.stringify({ acao: concluirAgora ? 'concluir' : 'reabrir' }),
     });
   }, []);
+
+  /**
+   * Promove um rascunho a "pronta" — o "Concluir rascunho" do cartão.
+   *
+   * Passa pelo PUT normal (e não por um PATCH próprio) porque `status` é
+   * campo da ordem como outro qualquer; o preço é reenviar os blocos, que a
+   * tela já tem em mãos pelo Firestore em tempo real.
+   */
+  const marcarPronta = useCallback(
+    async (id: string) => {
+      const alvo = cultos?.find((c) => c.id === id);
+      if (!alvo) return;
+      await salvar(alvo.data, alvo.hora, alvo.blocos, 'pronta', alvo.id);
+    },
+    [cultos, salvar],
+  );
 
   /** Abre o editor em branco com os blocos da ordem `id`, sem tocar o original. */
   const duplicar = useCallback(
@@ -203,7 +278,11 @@ export function TelaCulto() {
     const hoje = hojeLocal();
     const agora = horaLocal();
 
-    const deHoje = cultos.filter((c) => c.data === hoje && !c.concluidoEm);
+    // Rascunho fora da eleição, igual ao servidor (`buscarAtiva`): um
+    // esboço não pode roubar o posto de "no ar agora". Ver `culto.ts`.
+    const elegiveis = cultos.filter((c) => statusDoCulto(c) !== 'rascunho');
+
+    const deHoje = elegiveis.filter((c) => c.data === hoje && !c.concluidoEm);
     if (deHoje.length > 0) {
       return deHoje.reduce((maisProxima, atual) =>
         distanciaMinutos(atual.hora, agora) < distanciaMinutos(maisProxima.hora, agora)
@@ -212,7 +291,7 @@ export function TelaCulto() {
       );
     }
 
-    return cultos.find((c) => c.data > hoje && !c.concluidoEm) ?? null;
+    return elegiveis.find((c) => c.data > hoje && !c.concluidoEm) ?? null;
   }, [cultos]);
 
   if (cultos === undefined || podeMontar === null) {
@@ -223,8 +302,60 @@ export function TelaCulto() {
     );
   }
 
+  // Quem só opera não tem lista para escolher: cai direto na ordem ativa, sem
+  // "Voltar" (não há para onde). Quem monta chega na MESMA tela clicando num
+  // culto da lista — o componente é um só, muda apenas de onde vem o culto.
   if (!podeMontar) {
-    return <ExecucaoCulto culto={ativa} onAvancar={avancar} />;
+    return (
+      <ExecucaoCulto
+        culto={ativa}
+        onAvancar={() => avancar()}
+        onIrParaBloco={(blocoId) =>
+          ativa
+            ? irParaBloco(ativa.id, blocoId)
+            : Promise.resolve('Nenhuma ordem ativa agora.')
+        }
+        onTempoExtra={(minutos) => tempoExtra(minutos)}
+        onPausar={(pausarAgora) => pausar(pausarAgora)}
+      />
+    );
+  }
+
+  if (operandoId !== null) {
+    // Lido da lista a cada render, não copiado para o estado: assim o
+    // Firestore em tempo real reflete aqui o avanço feito de outro aparelho.
+    const emOperacao = cultos.find((c) => c.id === operandoId) ?? null;
+    return (
+      <ExecucaoCulto
+        culto={emOperacao}
+        onAvancar={() => avancar(operandoId)}
+        onIrParaBloco={(blocoId) => irParaBloco(operandoId, blocoId)}
+        onTempoExtra={(minutos) => tempoExtra(minutos, operandoId)}
+        onPausar={(pausarAgora) => pausar(pausarAgora, operandoId)}
+        onConcluir={async () => {
+          await concluir(operandoId, true);
+          setOperandoId(null);
+        }}
+        onEditar={() => {
+          setOperandoId(null);
+          setEditandoId(operandoId);
+        }}
+        onVoltar={() => setOperandoId(null)}
+      />
+    );
+  }
+
+  if (vendoModelos) {
+    return (
+      <BibliotecaModelos
+        onUsar={(blocos) => {
+          setBlocosParaDuplicar(blocos);
+          setVendoModelos(false);
+          setEditandoId('');
+        }}
+        onVoltar={() => setVendoModelos(false)}
+      />
+    );
   }
 
   if (editandoId !== null) {
@@ -251,10 +382,10 @@ export function TelaCulto() {
       onEditar={setEditandoId}
       onDuplicar={duplicar}
       onRemover={remover}
-      onAvancar={avancar}
+      onOperar={setOperandoId}
       onConcluir={concluir}
-      onTempoExtra={tempoExtra}
-      holyricsLigado={holyricsLigado}
+      onMarcarPronta={marcarPronta}
+      onModelos={() => setVendoModelos(true)}
     />
   );
 }

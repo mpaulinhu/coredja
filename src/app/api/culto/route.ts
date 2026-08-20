@@ -1,7 +1,7 @@
 import { cultoStore } from '@/lib/culto-store';
 import { podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
-import type { Bloco } from '@/lib/culto';
+import type { Bloco, StatusCulto } from '@/lib/culto';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +48,13 @@ export async function PUT(request: Request) {
     );
   }
 
-  let corpo: { data?: string; hora?: string; blocos?: Bloco[]; idAnterior?: string };
+  let corpo: {
+    data?: string;
+    hora?: string;
+    blocos?: Bloco[];
+    idAnterior?: string;
+    status?: unknown;
+  };
   try {
     corpo = await request.json();
   } catch {
@@ -76,8 +82,25 @@ export async function PUT(request: Request) {
     return Response.json({ erro: 'Horário inválido.' }, { status: 400 });
   }
 
+  // Só os campos conhecidos passam para o store: o corpo vem do cliente, e
+  // gravar o objeto cru deixaria qualquer campo extra entrar no documento.
+  // `responsavel` é aparado aqui (e some quando vazio) para não gravar
+  // string em branco, que a leitura teria de tratar como ausente de novo.
+  const blocos: Bloco[] = corpo.blocos.map((bloco) => {
+    const responsavel =
+      typeof bloco.responsavel === 'string' ? bloco.responsavel.trim() : '';
+    return {
+      id: String(bloco.id),
+      titulo: String(bloco.titulo ?? ''),
+      minutos: Number(bloco.minutos) || 0,
+      ...(responsavel ? { responsavel } : {}),
+    };
+  });
+
+  const status: StatusCulto = corpo.status === 'rascunho' ? 'rascunho' : 'pronta';
+
   const culto = await cultoStore.salvar(
-    { data: corpo.data, hora: corpo.hora, blocos: corpo.blocos },
+    { data: corpo.data, hora: corpo.hora, blocos, status },
     pessoa.nome,
   );
 
