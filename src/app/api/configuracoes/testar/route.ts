@@ -33,9 +33,11 @@ export async function POST(request: Request) {
   const resposta: ResultadoDoTeste =
     diagnostico.estado === 'ok'
       ? { estado: 'ok', painelNoAr: diagnostico.painelNoAr }
-      : diagnostico.estado === 'nao-configurado'
-        ? { estado: 'nao-configurado' }
-        : { estado: diagnostico.estado, motivo: diagnostico.motivo };
+      : diagnostico.estado === 'ok-pela-ponte'
+        ? { estado: 'ok-pela-ponte', computador: diagnostico.computador }
+        : diagnostico.estado === 'nao-configurado'
+          ? { estado: 'nao-configurado' }
+          : { estado: diagnostico.estado, motivo: diagnostico.motivo };
 
   return Response.json(resposta);
 }

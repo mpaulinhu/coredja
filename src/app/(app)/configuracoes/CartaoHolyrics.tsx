@@ -354,6 +354,16 @@ function ResultadoTeste({ resultado }: { resultado: ResultadoDoTeste }) {
       fundo: 'var(--sucesso-fundo)',
       titulo: 'Conectado.',
     },
+    // Estado só possível com o Coredja PUBLICADO: o teste direto sempre daria
+    // "inalcançável" nesse cenário (o servidor não alcança 192.168.x.x — ver
+    // o cabeçalho de holyrics.ts), então a checagem passou pela ponte em vez
+    // de tentar direto. Cor de sucesso, e não de aviso: do ponto de vista de
+    // quem opera, "a ponte está entregando" é exatamente o resultado bom.
+    'ok-pela-ponte': {
+      cor: 'var(--sucesso)',
+      fundo: 'var(--sucesso-fundo)',
+      titulo: 'Conectado pela ponte.',
+    },
     recusado: {
       cor: 'var(--urgente)',
       fundo: 'var(--urgente-fundo)',
@@ -390,6 +400,17 @@ function ResultadoTeste({ resultado }: { resultado: ResultadoDoTeste }) {
           {resultado.painelNoAr
             ? 'Há um cronômetro no ar no painel de comunicação agora.'
             : 'O painel de comunicação está sem cronômetro no ar no momento.'}
+        </p>
+      )}
+      {resultado.estado === 'ok-pela-ponte' && (
+        <p className="mt-1 text-[13px] text-texto-suave">
+          O servidor não alcança o Holyrics direto — normal com o Coredja
+          publicado (ver a explicação sobre rede local ao lado). Quem está
+          entregando os comandos é a ponte, rodando em{' '}
+          <strong className="font-semibold text-texto-suave">
+            {resultado.computador}
+          </strong>
+          .
         </p>
       )}
     </div>

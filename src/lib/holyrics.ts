@@ -30,7 +30,7 @@
  */
 
 import { lerConfiguracoesGravadas, resolver } from './configuracoes';
-import { enfileirarComando, ponteEstaViva } from './telao-fila-store';
+import { enfileirarComando, infoDaPonteAtiva, ponteEstaViva } from './telao-fila-store';
 import type { TipoDeComando } from './telao-fila';
 
 /** Quanto esperar antes de desistir. Curto: no domingo ninguém espera. */
@@ -509,6 +509,15 @@ export type DiagnosticoHolyrics =
   | { estado: 'nao-configurado' }
   /** Falou, respondeu, token aceito. */
   | { estado: 'ok'; painelNoAr: boolean }
+  /**
+   * O servidor não alcança o Holyrics direto (normal quando publicado — ver
+   * `telao-fila.ts`), MAS a ponte está viva e o sinal dela diz que o Holyrics
+   * responde. É o caso normal de "está tudo funcionando" com o Coredja
+   * hospedado: o teste direto SEMPRE dá "inalcançável" nesse cenário, e sem
+   * este estado a tela mentiria "não funciona" para uma instalação que
+   * funciona perfeitamente, só que por outro caminho.
+   */
+  | { estado: 'ok-pela-ponte'; computador: string }
   /** Chegou no Holyrics, mas ele recusou o token ou a permissão da ação. */
   | { estado: 'recusado'; motivo: string }
   /** Não chegou: Holyrics fechado, IP/porta errados, ou fora da rede. */
@@ -534,6 +543,16 @@ export type DiagnosticoHolyrics =
 export async function testarConexaoHolyrics(): Promise<DiagnosticoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
+
+  // A ponte manda ver primeiro — mesmo raciocínio de `holyrics-presenca.ts`.
+  // Com o Coredja publicado, o teste DIRETO abaixo nunca vai alcançar
+  // `192.168.x.x` (é a limitação de rede documentada em `telao-fila.ts`), e
+  // sem esta checagem o botão "Testar conexão" diria "não funciona" mesmo
+  // com a ponte entregando os comandos perfeitamente pela fila.
+  const infoDaPonte = await infoDaPonteAtiva();
+  if (infoDaPonte) {
+    return { estado: 'ok-pela-ponte', computador: infoDaPonte.computador };
+  }
 
   const endereco = `${config.url}/api/GetCommunicationPanelInfo?token=${encodeURIComponent(config.token)}`;
 

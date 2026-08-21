@@ -85,9 +85,40 @@ export async function ultimoSinalDaPonte(): Promise<Date | null> {
 
 /** Se a ponte deu sinal recente o bastante para ser considerada no ar. */
 export async function ponteEstaViva(): Promise<boolean> {
-  const ultimo = await ultimoSinalDaPonte();
-  if (!ultimo) return false;
-  return Date.now() - ultimo.getTime() < VALIDADE_DO_SINAL_MS;
+  return (await infoDaPonteAtiva()) !== null;
+}
+
+/**
+ * Dados da ponte, só se o sinal dela ainda estiver dentro da validade —
+ * `null` nos outros casos (nunca deu sinal, ou o sinal está velho demais).
+ *
+ * Usado pelo botão "Testar conexão" das Configurações: além de saber SE a
+ * ponte está viva, a tela mostra QUAL computador está servindo de ponte —
+ * útil quando a igreja tem mais de uma máquina candidata e alguém precisa
+ * confirmar qual delas está de fato no ar.
+ */
+export async function infoDaPonteAtiva(): Promise<{
+  computador: string;
+  versao?: string;
+  holyricsOk: boolean;
+} | null> {
+  try {
+    const doc = await getFirestoreDb().collection(COLECAO_SINAL).doc(DOC_SINAL).get();
+    if (!doc.exists) return null;
+
+    const dados = doc.data() ?? {};
+    const vistaEm = typeof dados.vistaEm === 'string' ? new Date(dados.vistaEm) : null;
+    if (!vistaEm || !Number.isFinite(vistaEm.getTime())) return null;
+    if (Date.now() - vistaEm.getTime() >= VALIDADE_DO_SINAL_MS) return null;
+
+    return {
+      computador: typeof dados.computador === 'string' ? dados.computador : 'computador desconhecido',
+      versao: typeof dados.versao === 'string' ? dados.versao : undefined,
+      holyricsOk: dados.holyricsOk === true,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -23,10 +23,12 @@ export interface CampoDeConfiguracao {
 
 /** Como está a conexão com o Holyrics, quando o teste roda. */
 export interface ResultadoDoTeste {
-  estado: 'nao-configurado' | 'ok' | 'recusado' | 'inalcancavel';
+  estado: 'nao-configurado' | 'ok' | 'ok-pela-ponte' | 'recusado' | 'inalcancavel';
   motivo?: string;
   /** Só em `ok`: se há um cronômetro no ar agora no painel de comunicação. */
   painelNoAr?: boolean;
+  /** Só em `ok-pela-ponte`: qual computador está servindo de ponte agora. */
+  computador?: string;
 }
 
 /** Uma pendência de configuração — o checklist do topo da tela. */
