@@ -13,7 +13,7 @@ import { SeloDoTelao, useEstadoDoTelao } from '@/components/EstadoDoTelao';
 import {
   CabecalhoDaPrevia,
   DiasDaPrevia,
-  PreviaDoTelao,
+  PreviasDoAviso,
   type ConteudoDaPrevia,
 } from '@/components/PreviaDoTelao';
 
@@ -445,7 +445,7 @@ export function TelaAvisos() {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-borda bg-fundo-elevado">
           <CabecalhoDaPrevia />
           <div className="p-5 sm:p-6">
-            <PreviaDoTelao conteudo={conteudoDaPrevia} />
+            <PreviasDoAviso conteudo={conteudoDaPrevia} />
             <DiasDaPrevia dias={conteudoDaPrevia.dias} />
           </div>
 

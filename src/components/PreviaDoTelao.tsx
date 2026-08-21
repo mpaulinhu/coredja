@@ -34,14 +34,27 @@ export interface ConteudoDaPrevia {
  * junto com a tela inteira em vez de junto com o quadro. É a diferença entre
  * a prévia ser fiel e ser só decorativa.
  *
- * Quando há arte, ela é o conteúdo — texto vai por cima só como legenda, com
- * um véu escuro atrás para o contraste não depender da imagem que o usuário
- * escolheu (uma arte clara apagaria texto branco).
+ * `modo` existe porque texto e arte são DUAS TELAS diferentes no Holyrics,
+ * nunca uma sobre a outra:
+ *
+ * - `'texto'`  → o Painel de Comunicação, que só recebe texto puro.
+ * - `'imagem'` → a Foto exibida pela aba Fotos, sem texto por cima.
+ *
+ * Antes as duas eram desenhadas juntas (texto sobre a arte, com um véu
+ * escuro atrás), o que prometia um resultado que o telão nunca entrega. Ver
+ * `PreviasDoAviso`, que mostra as duas lado a lado quando há arte.
  */
-export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
+export function PreviaDoTelao({
+  conteudo,
+  modo = 'texto',
+}: {
+  conteudo: ConteudoDaPrevia;
+  modo?: 'texto' | 'imagem';
+}) {
   const { titulo, texto, imagemUrl, imagemNome, etiqueta, etiquetaEmDestaque } = conteudo;
 
-  const temTexto = Boolean(titulo.trim() || texto.trim());
+  const mostrarImagem = modo === 'imagem' && Boolean(imagemUrl);
+  const mostrarTexto = modo === 'texto';
   const corEtiqueta = etiquetaEmDestaque
     ? 'var(--acento-texto-sobre-fundo)'
     : 'var(--texto-fraco)';
@@ -62,24 +75,18 @@ export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
         background: '#0a0807',
       }}
     >
-      {imagemUrl && (
+      {mostrarImagem && (
         <>
+          {/* `contain`, e não `cover`: a arte aparece INTEIRA, como o Holyrics
+              exibe uma foto. `cover` cortaria as bordas e esconderia
+              justamente o que a prévia existe para conferir. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imagemUrl}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-contain"
           />
-          {/* Véu só quando há texto por cima: numa arte sozinha ele só
-              escureceria o que a pessoa quer conferir. */}
-          {temTexto && (
-            <div
-              aria-hidden="true"
-              className="absolute inset-0"
-              style={{ background: 'rgb(10 8 7 / 0.62)' }}
-            />
-          )}
           {/* `download` funciona com `objectURL` (formulário) e com data URI
               (aviso já salvo) igual — os dois são reconhecidos pelo navegador
               como origem local, sem passar por um servidor de novo. */}
@@ -121,41 +128,78 @@ export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
         {etiqueta}
       </div>
 
-      {/* `relative` para ficar acima do véu e da arte. Uma cor só de letra,
-          um tamanho só de fonte para título e detalhes: é fiel ao que o
-          Holyrics realmente projeta — a API dele só recebe texto puro (sem
-          cor nem tamanho por linha), e o template configurado lá desenha o
-          bloco inteiro com a mesma fonte, do mesmo tamanho. Confirmado
-          contra uma captura real do Holyrics (21/08/2026). A quebra de
-          linha entre título e detalhes é o único jeito real de separar os
-          dois, e é a mesma folga generosa vista na captura. */}
-      <div className="relative flex flex-col items-center gap-[6%]">
-        {titulo.trim() ? (
-          <p
-            className="text-[clamp(18px,5.6cqw,54px)] leading-[1.05] font-extrabold tracking-[-0.03em] text-balance"
-            style={{ color: '#fff5ee' }}
-          >
-            {titulo}
-          </p>
-        ) : (
-          !imagemUrl && (
+      {/* Uma cor só de letra, um tamanho só de fonte para título e detalhes:
+          é fiel ao que o Holyrics realmente projeta — a API dele só recebe
+          texto puro (sem cor nem tamanho por linha), e o template configurado
+          lá desenha o bloco inteiro com a mesma fonte, do mesmo tamanho.
+          Confirmado contra uma captura real do Holyrics (21/08/2026). A
+          quebra de linha entre título e detalhes é o único jeito real de
+          separar os dois, e é a mesma folga generosa vista na captura. */}
+      {mostrarTexto && (
+        <div className="relative flex flex-col items-center gap-[6%]">
+          {titulo.trim() ? (
             <p
-              className="text-[clamp(14px,3.2cqw,28px)] leading-tight font-semibold"
-              style={{ color: '#7d6f66' }}
+              className="text-[clamp(18px,5.6cqw,54px)] leading-[1.05] font-extrabold tracking-[-0.03em] text-balance"
+              style={{ color: '#fff5ee' }}
             >
-              O título aparece aqui, grande, no telão.
+              {titulo}
             </p>
-          )
-        )}
+          ) : (
+            !texto.trim() && (
+              <p
+                className="text-[clamp(14px,3.2cqw,28px)] leading-tight font-semibold"
+                style={{ color: '#7d6f66' }}
+              >
+                O título aparece aqui, grande, no telão.
+              </p>
+            )
+          )}
 
-        {texto.trim() && (
-          <p
-            className="max-w-[85%] text-[clamp(18px,5.6cqw,54px)] leading-[1.05] font-extrabold tracking-[-0.03em] text-pretty"
-            style={{ color: '#fff5ee' }}
-          >
-            {texto}
-          </p>
-        )}
+          {texto.trim() && (
+            <p
+              className="max-w-[85%] text-[clamp(18px,5.6cqw,54px)] leading-[1.05] font-extrabold tracking-[-0.03em] text-pretty"
+              style={{ color: '#fff5ee' }}
+            >
+              {texto}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * As prévias do aviso: a tela de texto e, quando há arte, a da imagem.
+ *
+ * Lado a lado (empilhadas no celular) porque são duas telas DIFERENTES do
+ * Holyrics, exibidas em momentos diferentes — não uma composição. Cada uma
+ * ganha um rótulo dizendo de onde vem, senão duas caixas pretas parecidas
+ * viram adivinhação.
+ *
+ * Sem arte, só a de texto aparece: um quadro vazio rotulado "a arte" não
+ * informa nada que a ausência já não diga.
+ */
+export function PreviasDoAviso({ conteudo }: { conteudo: ConteudoDaPrevia }) {
+  if (!conteudo.imagemUrl) {
+    return <PreviaDoTelao conteudo={conteudo} modo="texto" />;
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div className="min-w-0">
+        <PreviaDoTelao conteudo={conteudo} modo="texto" />
+        <p className="mt-2 text-xs text-texto-fraco">
+          <span className="font-semibold text-texto-suave">Tela de retorno</span> — o
+          texto, no painel de comunicação.
+        </p>
+      </div>
+      <div className="min-w-0">
+        <PreviaDoTelao conteudo={conteudo} modo="imagem" />
+        <p className="mt-2 text-xs text-texto-fraco">
+          <span className="font-semibold text-texto-suave">Arte</span> — vai para as
+          Fotos do Holyrics, exibida à parte.
+        </p>
       </div>
     </div>
   );
