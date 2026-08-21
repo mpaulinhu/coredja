@@ -244,12 +244,19 @@ export function TelaAvisos() {
   const criar = useCallback((form: FormData) => chamar('/api/avisos', 'POST', form), [chamar]);
   const remover = useCallback((id: string) => chamar(`/api/avisos/${id}`, 'DELETE'), [chamar]);
 
-  /** Publicar/ocultar traz junto o que aconteceu do lado do Holyrics. */
+  /**
+   * Publicar/ocultar traz junto o que aconteceu do lado do Holyrics.
+   *
+   * `projetarImagem` só tem efeito num aviso COM arte: manda o Holyrics jogar
+   * a imagem no telão na mesma hora, em vez de apenas deixar o arquivo pronto
+   * na pasta de Fotos dele para quem está na cabine exibir. Ver
+   * `dadosDoComando.aviso` em `telao-fila.ts`.
+   */
   const mexerNoTelao = useCallback(
-    async (id: string, publicando: boolean) => {
+    async (id: string, publicando: boolean, projetarImagem = false) => {
       setRecado(null);
       const dados = (await chamar(
-        `/api/avisos/${id}/telao`,
+        `/api/avisos/${id}/telao${publicando && projetarImagem ? '?projetarImagem=1' : ''}`,
         publicando ? 'POST' : 'DELETE',
       )) as RetornoTelao | null;
       if (!dados) return;
@@ -258,10 +265,12 @@ export function TelaAvisos() {
       if (!holyrics || holyrics.estado === 'enviado') return;
 
       const complemento = holyrics.motivo ?? '';
-      // `nao-suportado` e `enviado-sem-imagem` não são falha: o envio fez o
-      // que dava para fazer, e o recado só conta o que ficou de fora.
+      // Nenhum destes é falha: o envio fez o que dava para fazer, e o recado
+      // conta o que ficou de fora (ou onde a arte foi parar).
       const parcial =
-        holyrics.estado === 'nao-suportado' || holyrics.estado === 'enviado-sem-imagem';
+        holyrics.estado === 'nao-suportado' ||
+        holyrics.estado === 'enviado-sem-imagem' ||
+        holyrics.estado === 'enviado-imagem-na-pasta';
       setRecado(
         parcial
           ? `Publicado no Coredja. ${complemento}`.trim()
@@ -465,6 +474,19 @@ export function TelaAvisos() {
                     ? 'Projetar tela de retorno'
                     : 'Publicar no telão'}
               </BotaoPrincipal>
+
+              {/* Com arte, projetar a imagem é uma ação À PARTE do botão
+                  principal: o normal é a arte só ficar pronta na pasta de
+                  Fotos do Holyrics, e quem está na cabine exibir na hora
+                  certa. Este botão é para o caso "põe isso no telão agora". */}
+              {holyricsLigado && selecionado.imagem && !selecionado.noAr && (
+                <BotaoSecundario
+                  onClick={() => mexerNoTelao(selecionado.id, true, true)}
+                  className="text-sm sm:h-14"
+                >
+                  Projetar a arte agora
+                </BotaoSecundario>
+              )}
 
               {holyricsLigado && !ehSoImagem(selecionado) && (
                 <BotaoSecundario

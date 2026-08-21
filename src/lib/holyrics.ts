@@ -46,6 +46,12 @@ export type ResultadoHolyrics =
   | { estado: 'nao-configurado' }
   | { estado: 'nao-suportado'; motivo: string }
   | { estado: 'enviado' }
+  /**
+   * Texto no telão e arte a caminho da pasta de Fotos do Holyrics, pela
+   * ponte. Estado próprio (e não `enviado`) porque a pessoa precisa saber
+   * que a arte NÃO subiu sozinha — ela está lá para ser exibida pela cabine.
+   */
+  | { estado: 'enviado-imagem-na-pasta'; motivo: string }
   /** Texto foi, imagem ficou para trás — ver `MOTIVO_IMAGEM_FICOU_DE_FORA`. */
   | { estado: 'enviado-sem-imagem'; motivo: string }
   | { estado: 'falhou'; motivo: string };
@@ -96,7 +102,7 @@ export const MOTIVO_IMAGEM_NAO_SUPORTADA =
  * texto, sem a arte que a pessoa achou que tinha projetado.
  */
 export const MOTIVO_IMAGEM_FICOU_DE_FORA =
-  'Só o texto foi: a API do Holyrics não recebe imagens de fora. Projete a arte manualmente.';
+  'Só o texto foi: sem a ponte instalada no computador do audiovisual, não há como levar a arte até o Holyrics. Projete a arte manualmente.';
 
 /** Um aviso só pode ser projetado via API se tiver texto. */
 export function podeEnviarAoHolyrics(aviso: {
@@ -113,11 +119,15 @@ export function podeEnviarAoHolyrics(aviso: {
  * mostrar. Publicar no Coredja não pode quebrar porque o Holyrics está
  * fechado.
  */
-export async function enviarAvisoAoHolyrics(aviso: {
-  titulo: string;
-  texto: string;
-  imagem?: ImagemDoAviso;
-}): Promise<ResultadoHolyrics> {
+export async function enviarAvisoAoHolyrics(
+  aviso: {
+    titulo: string;
+    texto: string;
+    imagem?: ImagemDoAviso;
+  },
+  /** Exibir a arte no telão na hora, além de deixá-la pronta na pasta. */
+  projetarImagem = false,
+): Promise<ResultadoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
@@ -138,17 +148,37 @@ export async function enviarAvisoAoHolyrics(aviso: {
     () => chamar(config, 'SetTextCommunicationPanel', { text: texto, show: true }),
     {
       tipo: 'aviso-projetar',
-      dados: dadosDoComando.aviso(aviso.titulo.trim(), aviso.texto.trim(), aviso.imagem?.url),
+      dados: dadosDoComando.aviso(
+        aviso.titulo.trim(),
+        aviso.texto.trim(),
+        aviso.imagem?.url,
+        aviso.imagem?.nomeArquivo,
+        projetarImagem,
+      ),
     },
+    // Com imagem, a ponte é o único caminho que leva a arte — ver a seção
+    // "A EXCEÇÃO" no comentário de `entregar`.
+    Boolean(aviso.imagem),
   );
 
-  // O caminho DIRETO nunca projeta imagem — `SetTextCommunicationPanel` só
+  // O caminho DIRETO nunca leva imagem — `SetTextCommunicationPanel` só
   // aceita texto (ver `MOTIVO_IMAGEM_FICOU_DE_FORA`). Pela FILA é diferente:
-  // a ponte recebeu a imagem junto (`dadosDoComando.aviso` acima) e vai
-  // salvá-la na pasta de Fotos do Holyrics antes de projetar — ver
-  // `holyrics.ts` da ponte. Só avisar "ficou de fora" quando for direto.
-  if (resultado.estado === 'enviado' && aviso.imagem && !pelaFila) {
-    return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
+  // a ponte recebeu a arte junto (`dadosDoComando.aviso` acima) e a grava na
+  // pasta de Fotos do Holyrics — ver `holyrics.ts` da ponte.
+  if (resultado.estado === 'enviado' && aviso.imagem) {
+    if (!pelaFila) {
+      return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
+    }
+    // Quando a arte NÃO sobe sozinha, dizer onde ela foi parar é o que evita
+    // alguém esperar por uma imagem que está só esperando ser exibida.
+    if (!projetarImagem) {
+      return {
+        estado: 'enviado-imagem-na-pasta',
+        motivo: `A arte foi para a pasta de Fotos do Holyrics${
+          aviso.imagem.nomeArquivo ? ` como "${aviso.imagem.nomeArquivo}"` : ''
+        } — é só exibir por lá na hora certa.`,
+      };
+    }
   }
   return resultado;
 }
@@ -237,11 +267,37 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
  * Só desvia para a fila em falha de REDE (o `catch`). Um Holyrics que
  * respondeu e recusou não é caso de ponte: enfileirar repetiria a recusa
  * alguns segundos depois, agora sem a mensagem que explica o motivo.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * A EXCEÇÃO: `preferirFila`
+ * ────────────────────────────────────────────────────────────────────────────
+ * Aviso com IMAGEM inverte a ordem, porque o raciocínio acima pressupõe que
+ * os dois caminhos fazem a mesma coisa — e para imagem eles não fazem. O
+ * caminho direto NÃO consegue projetar arte (a API não recebe imagem de
+ * fora); só a ponte consegue, salvando o arquivo na pasta de Fotos do
+ * Holyrics. Tentar direto primeiro nesse caso seria escolher, de propósito, o
+ * único caminho que não faz o que a pessoa pediu.
+ *
+ * Isso aparece exatamente quando o Coredja roda na MESMA rede do Holyrics
+ * (`Coredja.bat`, ou `localhost` em desenvolvimento): o direto funciona, o
+ * `catch` nunca dispara, e a ponte — instalada e viva ali do lado — nunca era
+ * consultada. O sintoma era "publiquei com imagem e só o texto foi", sem
+ * pista de que existia um caminho que teria funcionado.
  */
 async function entregar(
   executar: () => Promise<ResultadoHolyrics>,
   comando: { tipo: TipoDeComando; dados: Record<string, unknown> },
+  preferirFila = false,
 ): Promise<{ resultado: ResultadoHolyrics; pelaFila: boolean }> {
+  // Só vale a pena consultar a ponte se ela puder mesmo assumir; sem ponte
+  // viva o caminho direto segue sendo o melhor disponível (mesmo sem imagem).
+  if (preferirFila && (await ponteEstaViva())) {
+    const enfileirou = await enfileirarComando(comando.tipo, comando.dados);
+    if (enfileirou) return { resultado: { estado: 'enviado' }, pelaFila: true };
+    // Não conseguiu enfileirar: cai para o direto abaixo, que ao menos
+    // projeta o texto.
+  }
+
   try {
     return { resultado: await executar(), pelaFila: false };
   } catch (erro) {

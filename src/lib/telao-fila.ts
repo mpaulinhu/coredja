@@ -112,14 +112,33 @@ export const dadosDoComando = {
   /**
    * `imagem`, quando presente, é a arte em data URI (`data:image/jpeg;base64,...`)
    * — o mesmo formato já usado em `aviso.imagem.url` quando embutida. Só a
-   * PONTE sabe fazer algo com ela (salvar na pasta de fotos do Holyrics e
-   * projetar): o caminho direto (`entregar()` sem fila) nunca manda imagem,
-   * porque `SetTextCommunicationPanel` não aceita — ver `holyrics.ts`.
+   * PONTE sabe fazer algo com ela (salvar na pasta de Fotos do Holyrics): o
+   * caminho direto (`entregar()` sem fila) nunca manda imagem, porque
+   * `SetTextCommunicationPanel` não aceita — ver `holyrics.ts`.
+   *
+   * `imagemNome` vai junto para o arquivo ser gravado lá com o nome que a
+   * pessoa reconhece, e não um id gerado — é por ele que quem opera acha a
+   * arte na aba Fotos do Holyrics.
+   *
+   * `projetarImagem` decide o que acontece depois de salvar: `false` (padrão)
+   * só deixa o arquivo pronto na pasta, para quem está na cabine exibir na
+   * hora certa; `true` manda o Holyrics jogar no telão na mesma hora. São
+   * dois usos de verdade diferentes — "já deixa a arte lá para o domingo" e
+   * "põe isso no telão agora" — por isso a escolha é de quem clica, não um
+   * padrão fixo.
    */
-  aviso: (titulo: string, texto: string, imagemUrl?: string) => ({
+  aviso: (
+    titulo: string,
+    texto: string,
+    imagemUrl?: string,
+    imagemNome?: string,
+    projetarImagem?: boolean,
+  ) => ({
     titulo,
     texto,
     ...(imagemUrl ? { imagem: imagemUrl } : {}),
+    ...(imagemUrl && imagemNome ? { imagemNome } : {}),
+    ...(imagemUrl && projetarImagem ? { projetarImagem: true } : {}),
   }),
   avisoLimpar: () => ({}),
 } as const;
