@@ -13,7 +13,6 @@ import {
 import {
   hojeLocal,
   minutosDoBloco,
-  statusDoCulto,
   totalDeMinutos,
   type Culto,
 } from '@/lib/culto';
@@ -28,8 +27,6 @@ interface Props {
   /** Abre a tela de operar o culto ao vivo. */
   onOperar: (id: string) => void;
   onConcluir: (id: string, concluir: boolean) => Promise<void>;
-  /** Promove um rascunho a "pronta" — o "Concluir rascunho" da referência. */
-  onMarcarPronta: (id: string) => Promise<void>;
   /** Abre a biblioteca de modelos — o botão "Modelos" do topo. */
   onModelos: () => void;
 }
@@ -86,7 +83,6 @@ export function ListaCultos({
   onRemover,
   onOperar,
   onConcluir,
-  onMarcarPronta,
   onModelos,
 }: Props) {
   const [mostrarAnteriores, setMostrarAnteriores] = useState(false);
@@ -141,8 +137,6 @@ export function ListaCultos({
         <ul className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(380px,100%),1fr))] gap-4">
           {visiveis.map((culto) => {
             const noAr = culto.id === ativaId;
-            const passou = culto.data < hoje;
-            const rascunho = statusDoCulto(culto) === 'rascunho';
             const andamento = progresso(culto);
 
             return (
@@ -160,15 +154,12 @@ export function ListaCultos({
                       </Numero>
                     </div>
 
+                    {/* Sem selo "Pronta": o seletor Rascunho/Pronta saiu da
+                        tela de edição (a equipe dispara tudo na mão), então
+                        toda ordem é pronta e o selo não distinguiria nada. */}
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                       {noAr && <Selo tom="acento">Ativa agora</Selo>}
-                      {culto.concluidoEm ? (
-                        <Selo tom="neutro">Concluída</Selo>
-                      ) : (
-                        <Selo tom={rascunho ? 'alerta' : 'sucesso'}>
-                          {rascunho ? 'Rascunho' : 'Pronta'}
-                        </Selo>
-                      )}
+                      {culto.concluidoEm && <Selo tom="neutro">Concluída</Selo>}
                     </div>
                   </div>
 
@@ -203,25 +194,12 @@ export function ListaCultos({
                   )}
 
                   <div className="mt-auto flex flex-wrap gap-2.5">
-                    {/* Rascunho troca a ação principal: enquanto não estiver
-                        marcado como pronto ele não entra na eleição da ordem
-                        ativa (ver `culto.ts`), então "deixar pronto" é o que
-                        falta fazer nele — não operá-lo. */}
-                    {rascunho && !passou ? (
-                      <BotaoSecundario
-                        onClick={() => void onMarcarPronta(culto.id)}
-                        className="flex-1 text-sm"
-                      >
-                        Concluir rascunho
-                      </BotaoSecundario>
-                    ) : (
-                      <BotaoSecundario
-                        onClick={() => onOperar(culto.id)}
-                        className="flex-1 text-sm"
-                      >
-                        {noAr ? 'Operar agora' : 'Abrir'}
-                      </BotaoSecundario>
-                    )}
+                    <BotaoSecundario
+                      onClick={() => onOperar(culto.id)}
+                      className="flex-1 text-sm"
+                    >
+                      {noAr ? 'Operar agora' : 'Abrir'}
+                    </BotaoSecundario>
 
                     <BotaoDiscreto onClick={() => onEditar(culto.id)}>Editar</BotaoDiscreto>
                     <BotaoDiscreto onClick={() => onDuplicar(culto.id)}>

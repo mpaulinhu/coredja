@@ -270,22 +270,8 @@ export function TelaCulto() {
   }, []);
 
   /**
-   * Promove um rascunho a "pronta" — o "Concluir rascunho" do cartão.
-   *
-   * Passa pelo PUT normal (e não por um PATCH próprio) porque `status` é
-   * campo da ordem como outro qualquer; o preço é reenviar os blocos, que a
-   * tela já tem em mãos pelo Firestore em tempo real.
+   * Abre o editor em branco com os blocos da ordem `id`, sem tocar o original.
    */
-  const marcarPronta = useCallback(
-    async (id: string) => {
-      const alvo = cultos?.find((c) => c.id === id);
-      if (!alvo) return;
-      await salvar(alvo.data, alvo.hora, alvo.blocos, 'pronta', alvo.id);
-    },
-    [cultos, salvar],
-  );
-
-  /** Abre o editor em branco com os blocos da ordem `id`, sem tocar o original. */
   const duplicar = useCallback(
     (id: string) => {
       const original = cultos?.find((c) => c.id === id);
@@ -416,7 +402,6 @@ export function TelaCulto() {
       onRemover={remover}
       onOperar={setOperandoId}
       onConcluir={concluir}
-      onMarcarPronta={marcarPronta}
       onModelos={() => setVendoModelos(true)}
     />
   );

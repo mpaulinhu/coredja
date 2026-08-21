@@ -5,7 +5,6 @@ import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
 import { BotaoPrincipal, BotaoSecundario, Numero, Rotulo } from '@/components/Interface';
 import {
   idDoCulto,
-  statusDoCulto,
   terminoPrevisto,
   totalDeMinutos,
   type Bloco,
@@ -100,14 +99,6 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
   const [hora, setHora] = useState(culto?.hora ?? '09:00');
   const [blocos, setBlocos] = useState<Bloco[]>(
     culto?.blocos.length ? culto.blocos : blocosIniciais?.length ? blocosIniciais : [novoBloco()],
-  );
-  // Ordem NOVA nasce como rascunho: o estado real de uma ordem que acabou de
-  // ser aberta é "estou montando", e nascer "pronta" faria um esboço entrar
-  // na disputa por "ordem ativa" no instante do primeiro salvamento (ver
-  // `culto.ts`). Ordem existente mantém o que já tem — reeditar uma ordem
-  // pronta não pode rebaixá-la sozinho.
-  const [status, setStatus] = useState<StatusCulto>(
-    culto ? statusDoCulto(culto) : 'rascunho',
   );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -451,7 +442,11 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
     // `culto.id` vai junto para o servidor saber que é uma ordem existente
     // mudando de data/hora — nesse caso ele move, em vez de deixar a antiga
     // para trás.
-    const resultado = await onSalvar(data, hora, preenchidos, status, culto?.id);
+    // Sempre `'pronta'`: o seletor Rascunho/Pronta foi removido da tela (a
+    // equipe dispara tudo na mão, o estado não acrescentava nada ao fluxo
+    // real). O campo continua no modelo de dados por causa das ordens
+    // antigas — ver `statusDoCulto` em `culto.ts`.
+    const resultado = await onSalvar(data, hora, preenchidos, 'pronta', culto?.id);
     setSalvando(false);
 
     if (resultado.ok) {
@@ -742,67 +737,6 @@ export function EditorCulto({ culto, idsOcupados, blocosIniciais, onSalvar, onVo
           </button>
         </div>
       </div>
-
-      {/* Rascunho x Pronta: a única coisa que o status governa é se a ordem
-          pode ser eleita "ativa" pelo relógio (ver `culto.ts`). Por isso o
-          seletor explica o efeito em vez de só nomear os dois estados —
-          "rascunho" sozinho não diz o que muda. */}
-      <fieldset className="mx-auto mt-4 max-w-3xl rounded-2xl border border-borda bg-fundo-elevado p-5">
-        <legend className="px-1">
-          <Rotulo>Estado desta ordem</Rotulo>
-        </legend>
-
-        <div className="mt-1 flex flex-col gap-2.5 sm:flex-row">
-          {(
-            [
-              {
-                valor: 'rascunho' as const,
-                titulo: 'Rascunho',
-                texto: 'Ainda montando. Não entra no ar sozinha no horário dela.',
-              },
-              {
-                valor: 'pronta' as const,
-                titulo: 'Pronta',
-                texto: 'Pode assumir o culto sozinha quando chegar a hora.',
-              },
-            ]
-          ).map((opcao) => {
-            const escolhida = status === opcao.valor;
-            return (
-              <label
-                key={opcao.valor}
-                className="flex flex-1 cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors"
-                style={{
-                  borderColor: escolhida ? 'var(--acento-suave-borda)' : 'var(--borda)',
-                  background: escolhida
-                    ? 'var(--acento-suave-fundo)'
-                    : 'var(--fundo-cartao)',
-                }}
-              >
-                <input
-                  type="radio"
-                  name="status-da-ordem"
-                  value={opcao.valor}
-                  checked={escolhida}
-                  onChange={() => {
-                    setStatus(opcao.valor);
-                    setSalvo(false);
-                  }}
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--acento)]"
-                />
-                <span className="min-w-0">
-                  <span className="block text-sm font-bold text-texto">
-                    {opcao.titulo}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-texto-suave">
-                    {opcao.texto}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
 
       <div className="mx-auto mt-4 flex max-w-3xl flex-col gap-3 sm:flex-row">
         <BotaoPrincipal
