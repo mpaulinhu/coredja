@@ -45,25 +45,25 @@
  *   contador, cronômetro) — texto corrido continua em Manrope.
  */
 :root {
-  /* Claro: mesma identidade terracota da referência, com os papéis
-     invertidos. Os fundos não são branco puro — puxam um creme quente
-     (mesma família do #171210 escuro, do outro lado da escala), senão o
-     acento terracota fica solto sobre um branco frio. */
-  --fundo-fundo: #f3efea;
-  --fundo: #faf7f4;
-  --fundo-elevado: #f3efea;
+  /* Claro: base neutra/azulada (matiz ~220°), e não mais o creme quente
+     (matiz ~20-33°) da referência original — trocado em 21/08/2026 junto
+     com o acento e o tema escuro, para os fundos pararem de "vazar" um tom
+     terracota mesmo com o acento já azul. Mesma luminosidade/saturação de
+     antes, só o matiz mudou. */
+  --fundo-fundo: #edeef3;
+  --fundo: #f5f7f9;
+  --fundo-elevado: #edeef3;
   --fundo-cartao: #ffffff;
-  --borda: #e4dcd2;
-  --borda-forte: #cfc2b4;
+  --borda: #d5d9e2;
+  --borda-forte: #b8bfcc;
 
-  /* Contraste sobre --fundo-cartao (#ffffff):
-     texto #1c1613 ≈ 16.4:1 · suave #5f5449 ≈ 7.3:1 · fraco #7b6e61 ≈ 5.0:1.
-     Todos passam AA para texto normal (4.5:1) — o `--texto-fraco` foi
-     escurecido de propósito em relação à versão anterior (#948c7e, 3.6:1,
-     reprovava). */
-  --texto: #1c1613;
-  --texto-suave: #5f5449;
-  --texto-fraco: #7b6e61;
+  /* Mesmo motivo do bloco acima. Contraste sobre --fundo-cartao (#ffffff):
+     texto #13151b ≈ 18.3:1 · suave #4c515d ≈ 8.0:1 · fraco #646a78 ≈ 5.4:1.
+     Todos passam AA para texto normal (4.5:1), com folga maior que a
+     paleta anterior nos três níveis. */
+  --texto: #13151b;
+  --texto-suave: #4c515d;
+  --texto-fraco: #646a78;
 
   --urgente: #b23a2c;
   --urgente-fundo: #fbeae7;
@@ -93,25 +93,28 @@
 }
 
 [data-tema='escuro'] {
-  /* Valor por valor da tela de referência do Marcos ("Ordem do Culto -
-     offline.html"): #100c0a é o plano de fundo do body de lá, #171210 o da
-     barra lateral, #1a1411 o do cartão. */
-  --fundo-fundo: #100c0a;
-  --fundo: #130f0d;
-  --fundo-elevado: #171210;
-  --fundo-cartao: #1a1411;
-  --borda: #2a201a;
-  --borda-forte: #3b2c22;
+  /* Base neutra/azulada (matiz ~220°), e não mais os tons marrom/terracota
+     da referência original ("Ordem do Culto - offline.html", #100c0a /
+     #171210 / #1a1411) — trocada em 21/08/2026 junto com o acento, porque o
+     calor laranja desses fundos "vazava" por baixo do botão azul e o tema
+     escuro continuava lendo como terracota mesmo com o acento certo.
+     Mesma luminosidade e saturação de antes, só o matiz mudou. */
+  --fundo-fundo: #0b0c0f;
+  --fundo: #0d0e11;
+  --fundo-elevado: #121417;
+  --fundo-cartao: #111317;
+  --borda: #1c1f26;
+  --borda-forte: #262b36;
 
-  /* Contraste sobre --fundo-cartao (#1a1411):
-     texto #f4ece6 ≈ 14.6:1 · suave #c9b8ae ≈ 9.0:1 · fraco #a5958b ≈ 5.9:1.
-     O #8d7d73 da referência (4.2:1) reprovaria em AA — ele continua sendo
-     usado só como cor de RÓTULO em caixa alta com peso 800, e nunca como
-     única cor de texto corrido; o token `--texto-fraco` levou o valor mais
-     claro. */
-  --texto: #f4ece6;
-  --texto-suave: #c9b8ae;
-  --texto-fraco: #a5958b;
+  /* Mesmo motivo do bloco acima: --texto/-suave/-fraco tinham matiz ~24°
+     (o mesmo laranja dos fundos antigos) — pequeno, mas somado ao resto é
+     o que fazia o tema parecer quente mesmo com o acento azul. Luminosidade
+     e saturação mantidas, matiz levado para ~220°.
+     Contraste sobre --fundo-cartao (#111317):
+     texto #eaecf1 ≈ 15.7:1 · suave #b5bac5 ≈ 9.6:1 · fraco #9096a2 ≈ 6.3:1. */
+  --texto: #eaecf1;
+  --texto-suave: #b5bac5;
+  --texto-fraco: #9096a2;
 
   --urgente: #f0664a;
   --urgente-fundo: #2c1815;
