@@ -54,7 +54,11 @@ export function TelaConfiguracoes() {
   }, [carregar]);
 
   const salvar = useCallback(
-    async (mudancas: { holyricsUrl?: string; holyricsToken?: string }) => {
+    async (mudancas: {
+      holyricsUrl?: string;
+      holyricsToken?: string;
+      holyricsPastaFotos?: string;
+    }) => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return 'Sessão expirada. Recarregue a página.';
 

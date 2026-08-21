@@ -109,7 +109,18 @@ export const dadosDoComando = {
   cronometroParar: () => ({}),
   cronometroDefinir: (segundos: number) => ({ segundos }),
   cronometroSomar: (minutos: number) => ({ minutos }),
-  aviso: (titulo: string, texto: string) => ({ titulo, texto }),
+  /**
+   * `imagem`, quando presente, é a arte em data URI (`data:image/jpeg;base64,...`)
+   * — o mesmo formato já usado em `aviso.imagem.url` quando embutida. Só a
+   * PONTE sabe fazer algo com ela (salvar na pasta de fotos do Holyrics e
+   * projetar): o caminho direto (`entregar()` sem fila) nunca manda imagem,
+   * porque `SetTextCommunicationPanel` não aceita — ver `holyrics.ts`.
+   */
+  aviso: (titulo: string, texto: string, imagemUrl?: string) => ({
+    titulo,
+    texto,
+    ...(imagemUrl ? { imagem: imagemUrl } : {}),
+  }),
   avisoLimpar: () => ({}),
 } as const;
 
@@ -126,10 +137,10 @@ export function descreverComando(comando: ComandoDoTelao): string {
     case 'cronometro-somar':
       return `${Number(d.minutos) < 0 ? 'Tirar' : 'Somar'} ${Math.abs(Number(d.minutos))} min do cronômetro`;
     case 'aviso-projetar':
-      return `Projetar: ${String(d.titulo || d.texto || '').slice(0, 40)}`;
+      return `Projetar${d.imagem ? ' (com imagem)' : ''}: ${String(d.titulo || d.texto || '').slice(0, 40)}`;
     case 'aviso-limpar':
       return 'Tirar aviso do telão';
     case 'aviso-fila':
-      return `Enfileirar: ${String(d.titulo || d.texto || '').slice(0, 40)}`;
+      return `Enfileirar${d.imagem ? ' (com imagem)' : ''}: ${String(d.titulo || d.texto || '').slice(0, 40)}`;
   }
 }

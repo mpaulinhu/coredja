@@ -31,7 +31,8 @@
 
 import { lerConfiguracoesGravadas, resolver } from './configuracoes';
 import { enfileirarComando, infoDaPonteAtiva, ponteEstaViva } from './telao-fila-store';
-import type { TipoDeComando } from './telao-fila';
+import { dadosDoComando, type TipoDeComando } from './telao-fila';
+import type { ImagemDoAviso } from './avisos';
 
 /** Quanto esperar antes de desistir. Curto: no domingo ninguém espera. */
 const TEMPO_LIMITE_MS = 5000;
@@ -115,7 +116,7 @@ export function podeEnviarAoHolyrics(aviso: {
 export async function enviarAvisoAoHolyrics(aviso: {
   titulo: string;
   texto: string;
-  imagem?: unknown;
+  imagem?: ImagemDoAviso;
 }): Promise<ResultadoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
@@ -133,17 +134,20 @@ export async function enviarAvisoAoHolyrics(aviso: {
   // `{"status":"error","error":"Item not found"}` — ele EXIBE um anúncio já
   // cadastrado no Holyrics, procurando por id/nome, e não aceita texto novo
   // vindo de fora. O painel de comunicação aceita, que é o que precisamos.
-  const resultado = await entregar(
+  const { resultado, pelaFila } = await entregar(
     () => chamar(config, 'SetTextCommunicationPanel', { text: texto, show: true }),
     {
       tipo: 'aviso-projetar',
-      dados: { titulo: aviso.titulo.trim(), texto: aviso.texto.trim() },
+      dados: dadosDoComando.aviso(aviso.titulo.trim(), aviso.texto.trim(), aviso.imagem?.url),
     },
   );
 
-  // Deu certo, mas o aviso tinha arte junto: quem publicou precisa saber
-  // que só o texto chegou lá, senão conta com uma arte que não subiu.
-  if (resultado.estado === 'enviado' && aviso.imagem) {
+  // O caminho DIRETO nunca projeta imagem — `SetTextCommunicationPanel` só
+  // aceita texto (ver `MOTIVO_IMAGEM_FICOU_DE_FORA`). Pela FILA é diferente:
+  // a ponte recebeu a imagem junto (`dadosDoComando.aviso` acima) e vai
+  // salvá-la na pasta de Fotos do Holyrics antes de projetar — ver
+  // `holyrics.ts` da ponte. Só avisar "ficou de fora" quando for direto.
+  if (resultado.estado === 'enviado' && aviso.imagem && !pelaFila) {
     return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
   }
   return resultado;
@@ -163,7 +167,7 @@ export async function enviarAvisoAoHolyrics(aviso: {
 export async function enviarAvisoAFilaDoHolyrics(aviso: {
   titulo: string;
   texto: string;
-  imagem?: unknown;
+  imagem?: ImagemDoAviso;
 }): Promise<ResultadoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
@@ -176,7 +180,11 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
     .filter(Boolean)
     .join(' — ');
 
-  const resultado = await entregar(
+  // Sem imagem no comando de propósito, mesmo pela fila: isto só ENFILEIRA
+  // no Holyrics (playlist), não projeta agora — salvar a foto na pasta antes
+  // de alguém decidir exibir seria fazer trabalho que pode nunca ser usado.
+  // `enviarAvisoAoHolyrics`, que projeta na hora, é quem manda a imagem.
+  const resultado = await entregarResultado(
     () =>
       chamar(config, 'AddToPlaylist', {
         items: [{ type: 'title', name: texto }],
@@ -185,7 +193,7 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
       }),
     {
       tipo: 'aviso-fila',
-      dados: { titulo: aviso.titulo.trim(), texto: aviso.texto.trim() },
+      dados: dadosDoComando.aviso(aviso.titulo.trim(), aviso.texto.trim()),
     },
   );
 
@@ -200,7 +208,7 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  return entregar(
+  return entregarResultado(
     () => chamar(config, 'SetTextCommunicationPanel', { text: '', show: false }),
     { tipo: 'aviso-limpar', dados: {} },
   );
@@ -233,23 +241,35 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
 async function entregar(
   executar: () => Promise<ResultadoHolyrics>,
   comando: { tipo: TipoDeComando; dados: Record<string, unknown> },
-): Promise<ResultadoHolyrics> {
+): Promise<{ resultado: ResultadoHolyrics; pelaFila: boolean }> {
   try {
-    return await executar();
+    return { resultado: await executar(), pelaFila: false };
   } catch (erro) {
     // Não alcançou. Se há ponte viva, ela resolve.
     if (await ponteEstaViva()) {
       const enfileirou = await enfileirarComando(comando.tipo, comando.dados);
-      if (enfileirou) return { estado: 'enviado' };
+      if (enfileirou) return { resultado: { estado: 'enviado' }, pelaFila: true };
 
       return {
-        estado: 'falhou',
-        motivo:
-          'Não foi possível deixar o comando para o computador do audiovisual. Projete pelo Holyrics.',
+        resultado: {
+          estado: 'falhou',
+          motivo:
+            'Não foi possível deixar o comando para o computador do audiovisual. Projete pelo Holyrics.',
+        },
+        pelaFila: true,
       };
     }
-    return { estado: 'falhou', motivo: mensagemDoErro(erro) };
+    return { resultado: { estado: 'falhou', motivo: mensagemDoErro(erro) }, pelaFila: false };
   }
+}
+
+/** `entregar()` sem o `pelaFila` — para quem não precisa diferenciar (cronômetro, limpar). */
+async function entregarResultado(
+  executar: () => Promise<ResultadoHolyrics>,
+  comando: { tipo: TipoDeComando; dados: Record<string, unknown> },
+): Promise<ResultadoHolyrics> {
+  const { resultado } = await entregar(executar, comando);
+  return resultado;
 }
 
 /** POST para uma ação da API do Holyrics, com prazo para desistir. */
@@ -328,7 +348,7 @@ export async function iniciarCronometroNoHolyrics(
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  return entregar(() => ligarCronometro(config, minutos * 60), {
+  return entregarResultado(() => ligarCronometro(config, minutos * 60), {
     tipo: 'cronometro-iniciar',
     dados: { minutos },
   });
@@ -339,7 +359,7 @@ export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  return entregar(
+  return entregarResultado(
     () => chamar(config, 'StopCountdownCommunicationPanel', {}),
     { tipo: 'cronometro-parar', dados: {} },
   );
@@ -379,7 +399,7 @@ export async function somarTempoAoCronometroNoHolyrics(
   // Então o que vai para a fila é a INTENÇÃO ("some 5 minutos"), e a ponte
   // faz o ler-e-reiniciar do lado dela. Enfileirar um total absoluto
   // calculado aqui seria calcular sobre um valor que não se pôde ler.
-  return entregar(
+  return entregarResultado(
     async () => {
       const info = await lerPainelDoHolyrics(config);
 
@@ -407,7 +427,7 @@ export async function definirCronometroNoHolyrics(
   const config = await configHolyrics();
   if (!config) return { estado: 'nao-configurado' };
 
-  return entregar(() => ligarCronometro(config, segundos), {
+  return entregarResultado(() => ligarCronometro(config, segundos), {
     tipo: 'cronometro-definir',
     dados: { segundos },
   });

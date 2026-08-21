@@ -44,6 +44,15 @@ const DOCUMENTO = 'geral';
 export interface ConfiguracoesGravadas {
   holyricsUrl?: string;
   holyricsToken?: string;
+  /**
+   * Pasta de Fotos do Holyrics, NO PC DO AUDIOVISUAL — não no servidor do
+   * Coredja, que nunca escreve nela diretamente. Só a ponte lê este campo
+   * (via o mesmo documento) e salva o arquivo ali antes de projetar, porque
+   * `ShowImage` da API só exibe o que já está nessa pasta (ver `holyrics.ts`).
+   * Ausente = a ponte usa o caminho padrão dela (configurável também por
+   * arquivo local, para quem preferir não expor o caminho aqui).
+   */
+  holyricsPastaFotos?: string;
   /** ISO 8601 de quando alguém salvou pela última vez. */
   atualizadoEm?: string;
   /** Nome de quem salvou, para a tela dizer "alterado por Fulano". */
@@ -97,7 +106,9 @@ export async function lerConfiguracoesGravadas(): Promise<ConfiguracoesGravadas>
  * integração pela tela sem precisar do arquivo.
  */
 export async function salvarConfiguracoes(
-  mudancas: Partial<Pick<ConfiguracoesGravadas, 'holyricsUrl' | 'holyricsToken'>>,
+  mudancas: Partial<
+    Pick<ConfiguracoesGravadas, 'holyricsUrl' | 'holyricsToken' | 'holyricsPastaFotos'>
+  >,
   quem: string,
 ): Promise<void> {
   const dados: ConfiguracoesGravadas = {

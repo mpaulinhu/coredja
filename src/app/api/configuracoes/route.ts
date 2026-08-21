@@ -49,6 +49,7 @@ export async function GET(request: Request) {
 
   const url = resolver(gravado.holyricsUrl, process.env.HOLYRICS_URL);
   const token = resolver(gravado.holyricsToken, process.env.HOLYRICS_TOKEN);
+  const pastaFotos = resolver(gravado.holyricsPastaFotos, undefined);
   const holyricsConfigurado = Boolean(url.valor && token.valor);
 
   // A lista de departamentos serve a duas coisas: entra no checklist e prova,
@@ -80,6 +81,8 @@ export async function GET(request: Request) {
       // conferir "é esse token mesmo", nunca o bastante para usá-lo.
       token: { valor: mascarar(token.valor), origem: token.origem },
       configurado: holyricsConfigurado,
+      // Não é segredo — um caminho de pasta local não precisa de máscara.
+      pastaFotos: { valor: pastaFotos.valor, origem: pastaFotos.origem },
     },
     firebase: {
       armazenamento: ARMAZENAMENTO_ATIVO,
@@ -119,14 +122,18 @@ export async function PUT(request: Request) {
     );
   }
 
-  let corpo: { holyricsUrl?: string; holyricsToken?: string };
+  let corpo: { holyricsUrl?: string; holyricsToken?: string; holyricsPastaFotos?: string };
   try {
     corpo = await request.json();
   } catch {
     return Response.json({ erro: 'Envio inválido.' }, { status: 400 });
   }
 
-  const mudancas: { holyricsUrl?: string; holyricsToken?: string } = {};
+  const mudancas: {
+    holyricsUrl?: string;
+    holyricsToken?: string;
+    holyricsPastaFotos?: string;
+  } = {};
 
   if (typeof corpo.holyricsUrl === 'string') {
     // Normaliza também aqui, e não só na tela: a rota é a fronteira de
@@ -143,6 +150,12 @@ export async function PUT(request: Request) {
   // a tela nunca teve o valor real para reenviar.
   if (typeof corpo.holyricsToken === 'string') {
     mudancas.holyricsToken = corpo.holyricsToken.trim();
+  }
+
+  // Caminho de pasta local no PC do audiovisual — só a ponte lê este campo,
+  // o servidor não valida se ele existe (não tem como, roda em outra máquina).
+  if (typeof corpo.holyricsPastaFotos === 'string') {
+    mudancas.holyricsPastaFotos = corpo.holyricsPastaFotos.trim();
   }
 
   if (Object.keys(mudancas).length === 0) {

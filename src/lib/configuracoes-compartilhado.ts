@@ -47,6 +47,12 @@ export interface ConfiguracoesParaTela {
     url: CampoDeConfiguracao;
     token: CampoDeConfiguracao;
     configurado: boolean;
+    /**
+     * Pasta de Fotos do Holyrics NO PC DO AUDIOVISUAL — não usada pelo
+     * servidor do Coredja, só lida pela ponte antes de projetar um aviso com
+     * imagem. Campo opcional: vazio, a ponte usa o caminho padrão dela.
+     */
+    pastaFotos: CampoDeConfiguracao;
   };
   firebase: {
     /** "firebase" ou "sqlite" — de onde os dados estão vindo agora. */

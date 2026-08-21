@@ -18,6 +18,7 @@ interface Props {
   onSalvar: (mudancas: {
     holyricsUrl?: string;
     holyricsToken?: string;
+    holyricsPastaFotos?: string;
   }) => Promise<string | null>;
   onTestar: () => Promise<ResultadoDoTeste | null>;
 }
@@ -40,6 +41,7 @@ export function CartaoHolyrics({
   onTestar,
 }: Props) {
   const [url, setUrl] = useState(holyrics.url.valor);
+  const [pastaFotos, setPastaFotos] = useState(holyrics.pastaFotos.valor);
   const [trocandoToken, setTrocandoToken] = useState(false);
   const [tokenNovo, setTokenNovo] = useState('');
   const [tokenVisivel, setTokenVisivel] = useState(false);
@@ -71,7 +73,8 @@ export function CartaoHolyrics({
   const urlNormalizada = normalizarEnderecoDoHolyrics(url);
   const urlMudou = urlNormalizada !== holyrics.url.valor;
   const tokenMudou = trocandoToken && tokenNovo.trim().length > 0;
-  const temMudanca = urlMudou || tokenMudou;
+  const pastaFotosMudou = pastaFotos.trim() !== holyrics.pastaFotos.valor;
+  const temMudanca = urlMudou || tokenMudou || pastaFotosMudou;
 
   async function salvar() {
     setSalvando(true);
@@ -81,6 +84,7 @@ export function CartaoHolyrics({
     const problema = await onSalvar({
       ...(urlMudou ? { holyricsUrl: urlNormalizada } : {}),
       ...(tokenMudou ? { holyricsToken: tokenNovo.trim() } : {}),
+      ...(pastaFotosMudou ? { holyricsPastaFotos: pastaFotos.trim() } : {}),
     });
 
     setSalvando(false);
@@ -94,6 +98,7 @@ export function CartaoHolyrics({
     // O campo passa a mostrar o que de fato ficou gravado — a barra final
     // que o servidor removeu não pode continuar na tela.
     setUrl(urlNormalizada);
+    setPastaFotos(pastaFotos.trim());
     setTokenNovo('');
     setTrocandoToken(false);
     setTokenVisivel(false);
@@ -236,6 +241,35 @@ export function CartaoHolyrics({
                 </div>
               </>
             )}
+          </div>
+
+          {/* ── Pasta de fotos ──────────────────────────────────────── */}
+          <div>
+            <label
+              htmlFor="holyrics-pasta-fotos"
+              className="text-xs font-bold tracking-wide text-texto-suave uppercase"
+            >
+              Pasta de fotos do Holyrics{' '}
+              <span className="font-normal normal-case text-texto-fraco">(opcional)</span>
+            </label>
+            <input
+              id="holyrics-pasta-fotos"
+              value={pastaFotos}
+              onChange={(e) => setPastaFotos(e.target.value)}
+              placeholder="C:\Holyrics\Holyrics\files\media\image"
+              spellCheck={false}
+              autoComplete="off"
+              className="mt-1.5 w-full rounded-lg border border-borda bg-fundo-cartao px-3 py-2.5 font-mono text-[15px] text-texto placeholder:text-texto-fraco"
+            />
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Origem origem={holyrics.pastaFotos.origem} />
+              <span className="text-xs text-texto-fraco">
+                Onde a ponte salva a arte de um aviso antes de projetar — é a
+                mesma pasta onde o Holyrics guarda as fotos que aparecem na
+                aba de Fotos dele. Deixe em branco para usar o caminho padrão
+                configurado na própria ponte.
+              </span>
+            </div>
           </div>
 
           {/* ── Ações ───────────────────────────────────────────────── */}
