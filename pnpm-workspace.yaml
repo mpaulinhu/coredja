@@ -5,3 +5,13 @@ allowBuilds:
   # funciona sem eles, e menos código executado na instalação é melhor.
   '@firebase/util': false
   protobufjs: false
+  # Binário nativo do resolvedor de imports do ESLint, que chega por
+  # `eslint-config-next`. NEGADO por dois motivos: ele é ferramenta de
+  # desenvolvimento (não roda no site publicado), e o ESLint funciona sem o
+  # binário — cai num resolvedor em JavaScript, mais lento e irrelevante aqui.
+  #
+  # Precisa estar declarado, e não apenas ausente: a partir do pnpm 10 um
+  # pacote com script de instalação NÃO decidido derruba o `pnpm install` com
+  # ERR_PNPM_IGNORED_BUILDS. Foi o que quebrou o primeiro deploy na Netlify —
+  # localmente não aparece, porque a decisão já estava no cache da máquina.
+  unrs-resolver: false
