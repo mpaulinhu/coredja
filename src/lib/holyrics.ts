@@ -245,6 +245,25 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
 }
 
 /**
+ * Tira do telão a arte que está sendo exibida.
+ *
+ * Ação separada de `limparAvisoNoHolyrics` porque são duas telas diferentes:
+ * lá é o painel de comunicação (o monitor de retorno, com o texto), aqui é a
+ * projeção que a igreja vê. Quem põe a arte no ar (`ShowImage`, via
+ * "Projetar a arte agora") precisava de um jeito de tirá-la — sem isto, a
+ * imagem ficava presa até alguém mexer no Holyrics à mão.
+ */
+export async function fecharArteNoHolyrics(): Promise<ResultadoHolyrics> {
+  const config = await configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  return entregarResultado(
+    () => chamar(config, 'CloseCurrentPresentation', {}),
+    { tipo: 'arte-fechar', dados: {} },
+  );
+}
+
+/**
  * Entrega o comando pelo caminho que existir: direto, se o Holyrics estiver
  * ao alcance; pela fila da ponte, se não estiver.
  *

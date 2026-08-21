@@ -116,17 +116,22 @@ export function PreviaDoTelao({
         </>
       )}
 
-      <div
-        className="absolute top-[4%] right-[5%] flex items-center gap-2 text-[clamp(9px,1.6cqw,13px)] font-extrabold tracking-[0.14em] uppercase"
-        style={{ color: corEtiqueta }}
-      >
-        <span
-          aria-hidden="true"
-          className="inline-block h-2 w-2 shrink-0 rounded-full"
-          style={{ background: corEtiqueta }}
-        />
-        {etiqueta}
-      </div>
+      {/* Só na prévia de TEXTO: a etiqueta fala do estado do texto ("No
+          retorno", "Hoje", "Programado"), que não diz nada sobre a arte —
+          repeti-la sobre a imagem sugeriria que a foto também está no ar. */}
+      {mostrarTexto && (
+        <div
+          className="absolute top-[4%] right-[5%] flex items-center gap-2 text-[clamp(9px,1.6cqw,13px)] font-extrabold tracking-[0.14em] uppercase"
+          style={{ color: corEtiqueta }}
+        >
+          <span
+            aria-hidden="true"
+            className="inline-block h-2 w-2 shrink-0 rounded-full"
+            style={{ background: corEtiqueta }}
+          />
+          {etiqueta}
+        </div>
+      )}
 
       {/* Uma cor só de letra, um tamanho só de fonte para título e detalhes:
           é fiel ao que o Holyrics realmente projeta — a API dele só recebe

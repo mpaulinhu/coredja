@@ -73,9 +73,17 @@ function ehSoImagem(aviso: Aviso): boolean {
   return Boolean(aviso.imagem) && !aviso.titulo.trim() && !aviso.texto.trim();
 }
 
-/** A etiqueta que aparece no canto da prévia e no chip do cartão. */
+/**
+ * A etiqueta que aparece no canto da prévia e no chip do cartão.
+ *
+ * "No retorno", e não "No telão": `noAr` diz que o TEXTO está no painel de
+ * comunicação — o monitor que a equipe vê do palco —, não na projeção que a
+ * igreja inteira enxerga. Dizer "no telão" fazia parecer que o aviso já
+ * estava na tela grande, quando quem clicou tinha escolhido justamente o
+ * contrário. A arte é que vai para o telão, e por outro caminho.
+ */
 function etiquetaDoAviso(aviso: Aviso, hoje: string): string {
-  if (aviso.noAr) return 'No telão';
+  if (aviso.noAr) return 'No retorno';
   if (aviso.dias.length === 0) return 'Vale sempre';
   return valeNoDia(aviso, hoje) ? 'Hoje' : 'Programado';
 }
@@ -307,6 +315,28 @@ export function TelaAvisos() {
     [chamar],
   );
 
+  /**
+   * Tira do telão a arte que está sendo exibida.
+   *
+   * Não mexe no aviso: a arte, uma vez projetada, é estado do Holyrics, não
+   * do Coredja. Por isso não há `id` aqui nem `noAr` para atualizar — fecha
+   * o que estiver no ar e pronto.
+   */
+  const fecharArte = useCallback(async () => {
+    setRecado(null);
+    const dados = (await chamar('/api/telao/arte', 'POST')) as RetornoTelao | null;
+    if (!dados) return;
+
+    const holyrics = dados.holyrics;
+    if (!holyrics || holyrics.estado === 'enviado') {
+      setRecado('Arte retirada do telão.');
+      return;
+    }
+    setRecado(
+      `Não foi possível tirar a arte do telão. ${holyrics.motivo ?? ''}`.trim(),
+    );
+  }, [chamar]);
+
   const visiveis = useMemo(
     () => (avisos ?? []).filter((a) => passaNoFiltro(a, filtro, hoje)),
     [avisos, filtro, hoje],
@@ -485,6 +515,16 @@ export function TelaAvisos() {
                   className="text-sm sm:h-14"
                 >
                   Projetar a arte agora
+                </BotaoSecundario>
+              )}
+
+              {/* Sempre disponível quando há Holyrics, e não só depois de
+                  projetar por aqui: a arte no telão pode ter sido posta por
+                  outro aviso, ou pelo próprio Holyrics. Quem está limpando a
+                  tela quer limpar a tela, não caçar de onde veio a imagem. */}
+              {holyricsLigado && (
+                <BotaoSecundario onClick={fecharArte} className="text-sm sm:h-14">
+                  Tirar a arte do telão
                 </BotaoSecundario>
               )}
 

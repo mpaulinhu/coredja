@@ -50,6 +50,8 @@ export type TipoDeComando =
   | 'cronometro-somar'
   | 'aviso-projetar'
   | 'aviso-limpar'
+  /** Tira do telão a arte que está sendo exibida (só a ponte sabe fazer). */
+  | 'arte-fechar'
   | 'aviso-fila';
 
 /** Um comando esperando na fila. */
@@ -141,6 +143,7 @@ export const dadosDoComando = {
     ...(imagemUrl && projetarImagem ? { projetarImagem: true } : {}),
   }),
   avisoLimpar: () => ({}),
+  arteFechar: () => ({}),
 } as const;
 
 /** Descrição curta do comando, para o histórico e para o log da ponte. */
@@ -158,7 +161,9 @@ export function descreverComando(comando: ComandoDoTelao): string {
     case 'aviso-projetar':
       return `Projetar${d.imagem ? ' (com imagem)' : ''}: ${String(d.titulo || d.texto || '').slice(0, 40)}`;
     case 'aviso-limpar':
-      return 'Tirar aviso do telão';
+      return 'Tirar o texto da tela de retorno';
+    case 'arte-fechar':
+      return 'Tirar a arte do telão';
     case 'aviso-fila':
       return `Enfileirar${d.imagem ? ' (com imagem)' : ''}: ${String(d.titulo || d.texto || '').slice(0, 40)}`;
   }
