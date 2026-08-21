@@ -12,6 +12,8 @@ export interface ConteudoDaPrevia {
   texto: string;
   /** URL da arte — `objectURL` no formulário, `imagem.url` na lista. */
   imagemUrl?: string;
+  /** Nome original do arquivo, para o botão de baixar sugerir esse nome em vez de um data URI. */
+  imagemNome?: string;
   dias: string[];
   /** Etiqueta do canto superior direito ("NO TELÃO", "HOJE", "PROGRAMADO"). */
   etiqueta: string;
@@ -37,7 +39,7 @@ export interface ConteudoDaPrevia {
  * escolheu (uma arte clara apagaria texto branco).
  */
 export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
-  const { titulo, texto, imagemUrl, dias, etiqueta, etiquetaEmDestaque } = conteudo;
+  const { titulo, texto, imagemUrl, imagemNome, etiqueta, etiquetaEmDestaque } = conteudo;
 
   const temTexto = Boolean(titulo.trim() || texto.trim());
   const corEtiqueta = etiquetaEmDestaque
@@ -47,7 +49,11 @@ export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
   return (
     <div
       // `@container` liga a unidade `cqw` usada no `clamp()` abaixo.
-      className="@container relative flex aspect-video flex-col justify-center gap-[3%] overflow-hidden rounded-2xl border px-[9%] py-[8%]"
+      // Centralizado nos dois eixos, como o Painel de Comunicação do
+      // Holyrics de fato projeta — confirmado contra uma captura real
+      // (21/08/2026): título e subtítulo saem no meio da tela, não
+      // alinhados à esquerda.
+      className="@container relative flex aspect-video flex-col items-center justify-center gap-[3%] overflow-hidden rounded-2xl border px-[9%] py-[8%] text-center"
       style={{
         borderColor: 'var(--borda)',
         // O quadro é sempre escuro, nos DOIS temas: é a cor do projetor
@@ -74,6 +80,32 @@ export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
               style={{ background: 'rgb(10 8 7 / 0.62)' }}
             />
           )}
+          {/* `download` funciona com `objectURL` (formulário) e com data URI
+              (aviso já salvo) igual — os dois são reconhecidos pelo navegador
+              como origem local, sem passar por um servidor de novo. */}
+          <a
+            href={imagemUrl}
+            download={imagemNome || 'arte-do-aviso'}
+            aria-label="Baixar esta imagem"
+            title="Baixar imagem"
+            className="absolute right-[3%] bottom-[3%] flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-white/25"
+            style={{ background: 'rgb(0 0 0 / 0.45)' }}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="#fff5ee"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 3v12" />
+              <path d="M7 10l5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+          </a>
         </>
       )}
 
@@ -89,8 +121,15 @@ export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
         {etiqueta}
       </div>
 
-      {/* `relative` para ficar acima do véu e da arte. */}
-      <div className="relative flex flex-col gap-[3%]">
+      {/* `relative` para ficar acima do véu e da arte. Uma cor só de letra,
+          um tamanho só de fonte para título e detalhes: é fiel ao que o
+          Holyrics realmente projeta — a API dele só recebe texto puro (sem
+          cor nem tamanho por linha), e o template configurado lá desenha o
+          bloco inteiro com a mesma fonte, do mesmo tamanho. Confirmado
+          contra uma captura real do Holyrics (21/08/2026). A quebra de
+          linha entre título e detalhes é o único jeito real de separar os
+          dois, e é a mesma folga generosa vista na captura. */}
+      <div className="relative flex flex-col items-center gap-[6%]">
         {titulo.trim() ? (
           <p
             className="text-[clamp(18px,5.6cqw,54px)] leading-[1.05] font-extrabold tracking-[-0.03em] text-balance"
@@ -111,23 +150,32 @@ export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
 
         {texto.trim() && (
           <p
-            className="max-w-[80%] text-[clamp(11px,2.4cqw,22px)] leading-[1.4] text-pretty"
-            style={{ color: '#c9b8ae' }}
+            className="max-w-[85%] text-[clamp(18px,5.6cqw,54px)] leading-[1.05] font-extrabold tracking-[-0.03em] text-pretty"
+            style={{ color: '#fff5ee' }}
           >
             {texto}
           </p>
         )}
-
-        {dias.length > 0 && (
-          <Numero
-            className="text-[clamp(9px,1.8cqw,16px)] tracking-[0.06em]"
-            style={{ color: '#8fb0e0' }}
-          >
-            {dias.map(formatarDiaCurto).join('  ·  ')}
-          </Numero>
-        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Em quais dias o aviso vale — metadado do Coredja, não texto projetado.
+ *
+ * Vive FORA do quadro preto de `PreviaDoTelao` de propósito: título e
+ * detalhes são o que a API manda ao Holyrics, mas os dias nunca são
+ * enviados — são só a regra de quando o Coredja oferece o botão de
+ * publicar. Misturar os dois dentro do quadro sugeriria que a data também
+ * aparece no telão, o que não é verdade.
+ */
+export function DiasDaPrevia({ dias }: { dias: string[] }) {
+  if (dias.length === 0) return null;
+  return (
+    <Numero className="mt-2 block text-xs text-texto-fraco">
+      Vale em: {dias.map(formatarDiaCurto).join('  ·  ')}
+    </Numero>
   );
 }
 

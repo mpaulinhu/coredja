@@ -10,7 +10,12 @@ import { getFirestoreCliente } from '@/lib/firebase-cliente';
 import { TAMANHO_MAXIMO_BYTES } from '@/lib/limites';
 import { BotaoPrincipal, BotaoSecundario, Numero, Rotulo, Selo } from '@/components/Interface';
 import { SeloDoTelao, useEstadoDoTelao } from '@/components/EstadoDoTelao';
-import { CabecalhoDaPrevia, PreviaDoTelao, type ConteudoDaPrevia } from '@/components/PreviaDoTelao';
+import {
+  CabecalhoDaPrevia,
+  DiasDaPrevia,
+  PreviaDoTelao,
+  type ConteudoDaPrevia,
+} from '@/components/PreviaDoTelao';
 
 /** Resposta da publicação, na parte que conta o que houve com o Holyrics. */
 interface RetornoTelao {
@@ -344,7 +349,9 @@ export function TelaAvisos() {
       ? {
           titulo: selecionado.titulo,
           texto: selecionado.texto,
-          ...(selecionado.imagem ? { imagemUrl: selecionado.imagem.url } : {}),
+          ...(selecionado.imagem
+            ? { imagemUrl: selecionado.imagem.url, imagemNome: selecionado.imagem.nomeArquivo }
+            : {}),
           dias: selecionado.dias,
           etiqueta: etiquetaDoAviso(selecionado, hoje),
           etiquetaEmDestaque: selecionado.noAr,
@@ -430,6 +437,7 @@ export function TelaAvisos() {
           <CabecalhoDaPrevia />
           <div className="p-5 sm:p-6">
             <PreviaDoTelao conteudo={conteudoDaPrevia} />
+            <DiasDaPrevia dias={conteudoDaPrevia.dias} />
           </div>
 
           {/* Os botões do aviso SELECIONADO — não do rascunho: só dá para
@@ -830,7 +838,7 @@ function FormularioNovoAviso({
     onRascunho({
       titulo,
       texto,
-      ...(imagem ? { imagemUrl: imagem.previa } : {}),
+      ...(imagem ? { imagemUrl: imagem.previa, imagemNome: imagem.arquivo.name } : {}),
       dias,
       etiqueta: 'Novo aviso',
     });

@@ -39,7 +39,7 @@ export function BotaoPrincipal({ children, className = '', ...resto }: PropsBota
     <button
       type="button"
       {...resto}
-      className={`${ALVO} cursor-pointer rounded-xl px-5 font-extrabold transition-colors disabled:cursor-default disabled:opacity-50 ${className}`}
+      className={`${ALVO} cursor-pointer rounded-xl px-5 font-extrabold transition-[transform,filter] duration-100 active:scale-[0.97] active:brightness-90 disabled:cursor-default disabled:opacity-50 disabled:active:scale-100 disabled:active:brightness-100 ${className}`}
       style={{
         background: 'var(--acento)',
         color: 'var(--acento-texto)',
@@ -58,7 +58,7 @@ export function BotaoSecundario({ children, className = '', ...resto }: PropsBot
     <button
       type="button"
       {...resto}
-      className={`${ALVO} cursor-pointer rounded-xl border border-borda-forte bg-fundo-elevado px-4 font-semibold text-texto-suave transition-colors hover:bg-fundo-cartao hover:text-texto disabled:cursor-default disabled:opacity-50 ${className}`}
+      className={`${ALVO} cursor-pointer rounded-xl border border-borda-forte bg-fundo-elevado px-4 font-semibold text-texto-suave transition-[color,background-color,transform] duration-100 hover:bg-fundo-cartao hover:text-texto active:scale-[0.97] active:bg-borda disabled:cursor-default disabled:opacity-50 disabled:active:scale-100 ${className}`}
     >
       {children}
     </button>
@@ -71,7 +71,7 @@ export function BotaoDiscreto({ children, className = '', ...resto }: PropsBotao
     <button
       type="button"
       {...resto}
-      className={`${ALVO} cursor-pointer rounded-xl border border-borda bg-transparent px-4 text-sm text-texto-suave transition-colors hover:border-borda-forte hover:text-texto disabled:cursor-default disabled:opacity-50 ${className}`}
+      className={`${ALVO} cursor-pointer rounded-xl border border-borda bg-transparent px-4 text-sm text-texto-suave transition-[color,border-color,transform] duration-100 hover:border-borda-forte hover:text-texto active:scale-[0.97] active:bg-fundo-elevado disabled:cursor-default disabled:opacity-50 disabled:active:scale-100 ${className}`}
     >
       {children}
     </button>
