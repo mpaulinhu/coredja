@@ -9,7 +9,7 @@ interface Props {
 }
 
 /** Cor inicial de um departamento novo — a de destaque do produto. */
-const COR_PADRAO = '#e4814e';
+const COR_PADRAO = '#2f5aa8';
 
 export function FormularioDepartamento({ onCriar }: Props) {
   const [nome, setNome] = useState('');

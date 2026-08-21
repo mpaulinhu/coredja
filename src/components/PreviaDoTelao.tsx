@@ -121,7 +121,7 @@ export function PreviaDoTelao({ conteudo }: { conteudo: ConteudoDaPrevia }) {
         {dias.length > 0 && (
           <Numero
             className="text-[clamp(9px,1.8cqw,16px)] tracking-[0.06em]"
-            style={{ color: '#f0a06a' }}
+            style={{ color: '#8fb0e0' }}
           >
             {dias.map(formatarDiaCurto).join('  ·  ')}
           </Numero>

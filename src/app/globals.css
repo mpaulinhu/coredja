@@ -72,20 +72,22 @@
   --alerta: #8a4a1c;
   --alerta-fundo: #fbeddf;
 
-  /* O acento é o mesmo terracota da referência (#f08a4a), mas ele sozinho
-     sobre branco dá 2.2:1 — não serve para TEXTO no claro. Por isso existe
-     `--acento-texto-sobre-fundo` (#a3521f, 5.1:1 sobre branco), usado quando
-     a cor precisa carregar palavra; `--acento` fica para preenchimento de
-     botão e barra, onde o par é `--acento-texto`. */
-  --acento: #e4814e;
-  --acento-claro: #f0a06a;
-  --acento-escuro: #a3521f;
-  --acento-texto: #24140a;
-  --acento-texto-sobre-fundo: #a3521f;
-  --acento-sombra: rgb(228 129 78 / 0.35);
+  /* Azul royal da identidade da igreja (ADJA), trocado do terracota original
+     em 21/08/2026. #2f5aa8 sobre branco já dá 6.67:1 — ao contrário do
+     terracota anterior (2.2:1), serve para TEXTO direto, sem precisar de uma
+     segunda variante mais escura para essa finalidade. Mantido
+     `--acento-texto-sobre-fundo` como alias do próprio `--acento` só para
+     não quebrar quem já usa esse token — não há mais divergência de valor
+     entre os dois no tema claro. */
+  --acento: #2f5aa8;
+  --acento-claro: #6d93d1;
+  --acento-escuro: #1f3d75;
+  --acento-texto: #ffffff;
+  --acento-texto-sobre-fundo: #2f5aa8;
+  --acento-sombra: rgb(47 90 168 / 0.35);
 
-  --acento-suave-fundo: #fdf0e6;
-  --acento-suave-borda: #f0c9a8;
+  --acento-suave-fundo: #eaf0fa;
+  --acento-suave-borda: #b9cdea;
 
   --raio: 10px;
 }
@@ -118,17 +120,17 @@
   --alerta: #f0b84a;
   --alerta-fundo: #2a2118;
 
-  --acento: #f08a4a;
-  --acento-claro: #ffb181;
-  --acento-escuro: #c9773c;
-  --acento-texto: #1a0f07;
+  --acento: #6d93d1;
+  --acento-claro: #8fb0e0;
+  --acento-escuro: #4a7bc8;
+  --acento-texto: #0d1626;
   /* No escuro o próprio acento já tem contraste de sobra sobre o fundo
-     (#f08a4a sobre #1a1411 ≈ 7.9:1), então não precisa de variação. */
-  --acento-texto-sobre-fundo: #f08a4a;
-  --acento-sombra: rgb(240 138 74 / 0.55);
+     (#6d93d1 sobre #1a1411 ≈ 5.9:1), então não precisa de variação. */
+  --acento-texto-sobre-fundo: #6d93d1;
+  --acento-sombra: rgb(109 147 209 / 0.55);
 
-  --acento-suave-fundo: #2a1d14;
-  --acento-suave-borda: #5c3c25;
+  --acento-suave-fundo: #16233b;
+  --acento-suave-borda: #2e4a7a;
 }
 
 @theme inline {

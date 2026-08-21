@@ -11,7 +11,7 @@
  */
 
 const SUGESTOES = [
-  '#e4814e',
+  '#2f5aa8',
   '#e4574e',
   '#d75a9c',
   '#8b5cf6',
