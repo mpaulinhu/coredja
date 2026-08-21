@@ -1,47 +1,48 @@
+import { getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestoreDb } from '@/lib/firebase';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Rota de diagnóstico TEMPORÁRIA — investigar o 500 sem corpo em produção.
- * Remover depois de descobrir a causa. Não exige autenticação de propósito
- * (é só para descobrir o ERRO, não expõe dado nenhum de pessoa/recado).
+ * Rota de diagnóstico TEMPORÁRIA (v2) — investigar o 500 nas rotas
+ * autenticadas. A v1 confirmou que a conexão com o Firestore está OK; agora
+ * testa o outro pedaço: verificar o token do Authorization, que usa
+ * `firebase-admin/auth` e não `firebase-admin/firestore`.
  */
-export async function GET() {
-  const diagnostico: Record<string, unknown> = {
-    temCredencialAmbiente: Boolean(process.env.FIREBASE_CREDENCIAIS_JSON),
-    tamanhoCredencialAmbiente: process.env.FIREBASE_CREDENCIAIS_JSON?.length ?? 0,
-    projectIdEnv: process.env.FIREBASE_PROJECT_ID ?? null,
-    storage: process.env.COREDJA_STORAGE ?? null,
-  };
+export async function GET(request: Request) {
+  const diagnostico: Record<string, unknown> = {};
 
   try {
-    const cred = process.env.FIREBASE_CREDENCIAIS_JSON;
-    if (cred) {
-      const parsed = JSON.parse(cred);
-      diagnostico.credencialParseOk = true;
-      diagnostico.credencialProjectId = parsed.project_id;
-      diagnostico.credencialClientEmail = parsed.client_email;
-      diagnostico.privateKeyComecaCom = String(parsed.private_key).slice(0, 30);
-      diagnostico.privateKeyTerminaCom = String(parsed.private_key).slice(-30);
-      diagnostico.privateKeyTemQuebraReal = String(parsed.private_key).includes('\n');
-      diagnostico.privateKeyTemBarraNLiteral = String(parsed.private_key).includes('\n');
-    }
+    getFirestoreDb();
+    diagnostico.appInicializado = getApps().length > 0;
   } catch (e) {
-    diagnostico.credencialParseOk = false;
-    diagnostico.erroDeParse = e instanceof Error ? e.message : String(e);
+    diagnostico.erroAoInicializar = e instanceof Error ? e.message : String(e);
+    return Response.json(diagnostico, { status: 200 });
+  }
+
+  const cabecalho = request.headers.get('authorization') ?? '';
+  const [tipo, token] = cabecalho.split(' ');
+  diagnostico.recebeuToken = tipo === 'Bearer' && Boolean(token);
+  diagnostico.tamanhoToken = token?.length ?? 0;
+
+  if (!token) {
+    diagnostico.observacao = 'Sem token no cabeçalho — mande Authorization: Bearer <token>';
+    return Response.json(diagnostico);
   }
 
   try {
-    const db = getFirestoreDb();
-    const snap = await db.collection('departamentos').limit(1).get();
-    diagnostico.firestoreConectou = true;
-    diagnostico.documentosLidos = snap.size;
+    const app = getApps()[0];
+    const decodificado = await getAuth(app).verifyIdToken(token);
+    diagnostico.tokenValido = true;
+    diagnostico.uid = decodificado.uid;
+    diagnostico.email = decodificado.email;
   } catch (e) {
-    diagnostico.firestoreConectou = false;
-    diagnostico.erroFirestore = e instanceof Error ? e.message : String(e);
-    diagnostico.erroFirestoreStack =
-      e instanceof Error ? e.stack?.split('\n').slice(0, 5) : null;
+    diagnostico.tokenValido = false;
+    diagnostico.erroAoVerificarToken = e instanceof Error ? e.message : String(e);
+    diagnostico.erroStack = e instanceof Error ? e.stack?.split('\n').slice(0, 6) : null;
+    // Alguns erros do Admin SDK trazem `.code`
+    diagnostico.erroCode = (e as { code?: string })?.code ?? null;
   }
 
   return Response.json(diagnostico);
