@@ -16,3 +16,15 @@
 [build.environment]
   # A Netlify precisa de Node 20+ para o Next 16.
   NODE_VERSION = "22"
+
+[functions]
+  # zisi (o empacotador padrao da Netlify para as functions) carrega
+  # firebase-admin/auth como "external module" e o require() num contexto
+  # que nao suporta require(ESM) — quebra com ERR_REQUIRE_ESM ao tentar
+  # carregar o `jose`, que a partir da v6 e so-ESM (vem transitivamente via
+  # firebase-admin -> jwks-rsa -> jose). Nem serverExternalPackages nem
+  # transpilePackages do next.config.ts mudam isso: essa decisao acontece
+  # numa camada da propria Netlify, depois que o Next ja terminou de
+  # compilar. esbuild empacota esses modulos de verdade em vez de deixa-los
+  # como require() cru, e resolve.
+  node_bundler = "esbuild"
