@@ -35,9 +35,11 @@ export async function POST(request: Request) {
       ? { estado: 'ok', painelNoAr: diagnostico.painelNoAr }
       : diagnostico.estado === 'ok-pela-ponte'
         ? { estado: 'ok-pela-ponte', computador: diagnostico.computador }
-        : diagnostico.estado === 'nao-configurado'
-          ? { estado: 'nao-configurado' }
-          : { estado: diagnostico.estado, motivo: diagnostico.motivo };
+        : diagnostico.estado === 'ponte-sem-holyrics'
+          ? { estado: 'ponte-sem-holyrics', computador: diagnostico.computador }
+          : diagnostico.estado === 'nao-configurado'
+            ? { estado: 'nao-configurado' }
+            : { estado: diagnostico.estado, motivo: diagnostico.motivo };
 
   return Response.json(resposta);
 }

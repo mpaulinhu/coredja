@@ -613,6 +613,17 @@ export type DiagnosticoHolyrics =
    * funciona perfeitamente, só que por outro caminho.
    */
   | { estado: 'ok-pela-ponte'; computador: string }
+  /**
+   * A ponte está viva, mas ELA não está conseguindo falar com o Holyrics.
+   *
+   * É o pior cenário para esconder atrás de um "conectado": aconteceu de
+   * verdade (24/08/2026) — o teste disse OK só porque havia uma ponte viva,
+   * e quem confiou nele foi até a igreja descobrir que nenhuma ação
+   * funcionava. A ponte reporta `holyricsOk` no sinal de vida justamente
+   * para isto ser detectável; ignorar esse campo era transformar um
+   * diagnóstico preciso em silêncio.
+   */
+  | { estado: 'ponte-sem-holyrics'; computador: string }
   /** Chegou no Holyrics, mas ele recusou o token ou a permissão da ação. */
   | { estado: 'recusado'; motivo: string }
   /** Não chegou: Holyrics fechado, IP/porta errados, ou fora da rede. */
@@ -646,6 +657,13 @@ export async function testarConexaoHolyrics(): Promise<DiagnosticoHolyrics> {
   // com a ponte entregando os comandos perfeitamente pela fila.
   const infoDaPonte = await infoDaPonteAtiva();
   if (infoDaPonte) {
+    // A ponte diz, no próprio sinal de vida, se ELA alcança o Holyrics.
+    // Ignorar isso e responder "conectado" só porque existe ponte viva é o
+    // que fez alguém viajar até a igreja para descobrir na hora que nada
+    // funcionava — ver `ponte-sem-holyrics` em `DiagnosticoHolyrics`.
+    if (!infoDaPonte.holyricsOk) {
+      return { estado: 'ponte-sem-holyrics', computador: infoDaPonte.computador };
+    }
     return { estado: 'ok-pela-ponte', computador: infoDaPonte.computador };
   }
 

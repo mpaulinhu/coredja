@@ -398,6 +398,14 @@ function ResultadoTeste({ resultado }: { resultado: ResultadoDoTeste }) {
       fundo: 'var(--sucesso-fundo)',
       titulo: 'Conectado pela ponte.',
     },
+    // Cor de ALERTA, não de sucesso: metade do caminho funcionando é a
+    // situação mais enganosa de todas — a ponte responde, então parece
+    // ligado, mas nenhuma ação vai chegar ao telão.
+    'ponte-sem-holyrics': {
+      cor: 'var(--alerta)',
+      fundo: 'var(--alerta-fundo)',
+      titulo: 'A ponte está rodando, mas não alcança o Holyrics.',
+    },
     recusado: {
       cor: 'var(--urgente)',
       fundo: 'var(--urgente-fundo)',
@@ -446,6 +454,32 @@ function ResultadoTeste({ resultado }: { resultado: ResultadoDoTeste }) {
           </strong>
           .
         </p>
+      )}
+      {resultado.estado === 'ponte-sem-holyrics' && (
+        <div className="mt-1 space-y-2 text-[13px] leading-relaxed text-texto-suave">
+          <p>
+            A ponte em{' '}
+            <strong className="font-semibold text-texto-suave">
+              {resultado.computador}
+            </strong>{' '}
+            está no ar e falando com o Coredja, mas ela não está conseguindo
+            falar com o Holyrics. <strong>Nenhuma ação vai chegar ao telão</strong>{' '}
+            enquanto isso durar.
+          </p>
+          <p>Confira, nesse computador:</p>
+          <ul className="list-disc space-y-0.5 pl-5">
+            <li>o Holyrics está aberto, com o API Server ligado;</li>
+            <li>
+              o endereço aqui em cima é o que ESSE computador enxerga — se a
+              ponte roda na mesma máquina do Holyrics, costuma ser{' '}
+              <code className="font-mono">localhost:8091</code>;
+            </li>
+            <li>
+              o arquivo <code className="font-mono">registro.txt</code>, na pasta
+              da ponte, diz o erro exato da última tentativa.
+            </li>
+          </ul>
+        </div>
       )}
     </div>
   );

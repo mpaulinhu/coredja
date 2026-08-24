@@ -37,7 +37,7 @@
  */
 
 import { configHolyrics } from './holyrics';
-import { ponteEstaViva } from './telao-fila-store';
+import { infoDaPonteAtiva } from './telao-fila-store';
 
 /**
  * Quanto tempo uma resposta vale antes de perguntar de novo.
@@ -126,9 +126,15 @@ async function sondar(): Promise<EstadoDoTelao> {
   // esta checagem o selo diria "desconectado" o tempo todo — inclusive com
   // tudo funcionando pela ponte, que é o cenário normal quando hospedado.
   //
-  // Rodando na rede da igreja não há ponte nenhuma, `ponteEstaViva()` devolve
-  // falso, e a sonda direta abaixo decide — como antes.
-  if (await ponteEstaViva()) return 'conectado';
+  // Rodando na rede da igreja não há ponte nenhuma, `infoDaPonteAtiva()`
+  // devolve `null`, e a sonda direta abaixo decide — como antes.
+  //
+  // `holyricsOk` é o que separa "a ponte está viva" de "o telão responde".
+  // Tratar ponte viva como conectado, sem olhar esse campo, foi o que fez o
+  // selo ficar verde na igreja (24/08/2026) enquanto nenhuma ação chegava ao
+  // telão — a ponte estava no ar, mas não alcançava o Holyrics.
+  const ponte = await infoDaPonteAtiva();
+  if (ponte) return ponte.holyricsOk ? 'conectado' : 'desconectado';
 
   try {
     const resposta = await fetch(
