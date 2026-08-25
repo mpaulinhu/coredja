@@ -572,22 +572,31 @@ function mensagemDoErro(erro: unknown): string {
 export async function iniciarCronometroNoHolyrics(
   minutos: number,
 ): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
-  return entregarResultado(() => ligarCronometro(config, minutos * 60), {
-    tipo: 'cronometro-iniciar',
-    dados: { minutos },
-  });
+  // `configHolyrics()` (com as sondas de rede) só roda dentro da closure —
+  // mesmo motivo dos avisos: publicado, com a ponte viva, `entregar()` cai
+  // na fila sem nunca chamar isto, e as sondas nem acontecem.
+  return entregarResultado(
+    async () => {
+      const config = await configHolyrics();
+      if (!config) return { estado: 'nao-configurado' };
+      return ligarCronometro(config, minutos * 60);
+    },
+    { tipo: 'cronometro-iniciar', dados: { minutos } },
+  );
 }
 
 /** Desliga o cronômetro do painel. Mesmo contrato das outras. */
 export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
   return entregarResultado(
-    () => chamar(config, 'StopCountdownCommunicationPanel', {}),
+    async () => {
+      const config = await configHolyrics();
+      if (!config) return { estado: 'nao-configurado' };
+      return chamar(config, 'StopCountdownCommunicationPanel', {});
+    },
     { tipo: 'cronometro-parar', dados: {} },
   );
 }
@@ -612,8 +621,7 @@ export async function pararCronometroNoHolyrics(): Promise<ResultadoHolyrics> {
 export async function somarTempoAoCronometroNoHolyrics(
   minutosExtras: number,
 ): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
   const extras = Math.round(minutosExtras * 60);
 
@@ -628,6 +636,9 @@ export async function somarTempoAoCronometroNoHolyrics(
   // calculado aqui seria calcular sobre um valor que não se pôde ler.
   return entregarResultado(
     async () => {
+      const config = await configHolyrics();
+      if (!config) return { estado: 'nao-configurado' };
+
       const info = await lerPainelDoHolyrics(config);
 
       // Sem cronômetro no ar (nunca ligou, ou pararam): "dar mais X minutos"
@@ -651,13 +662,16 @@ export async function somarTempoAoCronometroNoHolyrics(
 export async function definirCronometroNoHolyrics(
   segundos: number,
 ): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
-  return entregarResultado(() => ligarCronometro(config, segundos), {
-    tipo: 'cronometro-definir',
-    dados: { segundos },
-  });
+  return entregarResultado(
+    async () => {
+      const config = await configHolyrics();
+      if (!config) return { estado: 'nao-configurado' };
+      return ligarCronometro(config, segundos);
+    },
+    { tipo: 'cronometro-definir', dados: { segundos } },
+  );
 }
 
 /**
