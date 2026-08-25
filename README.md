@@ -242,31 +242,46 @@ Para publicar mudanças nas regras: Console do Firebase → Firestore → aba
 
 ---
 
-## Publicar na internet (Netlify)
+## Publicar na internet (Vercel)
 
-Hospedar tira a dependência do PC ligado e do Wi-Fi da igreja: as áreas
-acessam de qualquer lugar. O plano gratuito da Netlify dá conta.
+Hospedar resolve a necessidade que o PC ligado não cobre: **os recados
+precisam funcionar de qualquer lugar**. Ninguém monta aviso de telão estando
+na igreja no domingo — esse trabalho é feito na semana, de casa.
 
-### O que já está pronto
+O telão continua funcionando, porque quem fala com o Holyrics é o **Conector**
+(ver `coredja-ponte`), rodando dentro da rede da igreja. Publicado, o Coredja
+grava o comando no Firestore e o Conector executa ali do lado.
 
-- [`netlify.toml`](netlify.toml) com a configuração de build
-- A credencial pode vir de variável de ambiente, sem precisar do arquivo
-- O tempo real usa o Firestore, que funciona com vários servidores
-- As imagens vão embutidas no recado, sem depender de disco
+### Por que Vercel e não Netlify
+
+O projeto rodou na Netlify até 21/08/2026 (`coreadja.netlify.app`). O plano
+gratuito de lá conta **minutos de build**, e ao esgotar os deploys de produção
+ficam pausados até o próximo ciclo de cobrança — o site publicado continua no
+ar, mas parado na última versão. Foi o que aconteceu.
+
+A Vercel é a empresa que faz o Next.js, e o plano gratuito (Hobby) é generoso
+para o volume de uma igreja. O `netlify.toml` fica no repositório por ora, como
+histórico — não atrapalha.
 
 ### Passo a passo
 
-1. Suba o projeto para um repositório no GitHub.
-2. Em [app.netlify.com](https://app.netlify.com), crie a conta (grátis) e
-   escolha **Add new site → Import an existing project**.
-3. Conecte o repositório. A Netlify lê o `netlify.toml` sozinha.
-4. Antes de publicar, cadastre as variáveis em **Site configuration →
-   Environment variables**:
+1. Suba o código para o GitHub (`git push origin main`).
+2. Em [vercel.com](https://vercel.com), entre com a conta do GitHub.
+3. **Add New → Project** e escolha o repositório `coredja`. A Vercel detecta
+   Next.js e lê o `vercel.json` sozinha.
+4. **Antes de clicar em Deploy**, cadastre as variáveis em *Environment
+   Variables* (tabela abaixo).
+5. Deploy. Sai um endereço como `coredja.vercel.app`.
+
+### As variáveis
+
+Os valores das `NEXT_PUBLIC_*` estão no `.env.local` e não são secretos (vão
+para o navegador de qualquer forma). As outras duas são.
 
 | Variável | Valor |
 |---|---|
 | `COREDJA_STORAGE` | `firebase` |
-| `FIREBASE_CREDENCIAIS_JSON` | O conteúdo **inteiro** de `segredos/firebase-admin.json` |
+| `FIREBASE_CREDENCIAIS_JSON` | O conteúdo **inteiro** de `segredos/firebase-admin.json`, colado como texto |
 | `NEXT_PUBLIC_FIREBASE_API_KEY` | do `.env.local` |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | do `.env.local` |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | do `.env.local` |
@@ -274,35 +289,61 @@ acessam de qualquer lugar. O plano gratuito da Netlify dá conta.
 | `NEXT_PUBLIC_FIREBASE_SENDER_ID` | do `.env.local` |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | do `.env.local` |
 
-5. Publique. Sai um endereço como `coredja.netlify.app`.
+**Repare no `_JSON` no fim** de `FIREBASE_CREDENCIAIS_JSON`. Local existe
+`FIREBASE_CREDENCIAIS`, que é o **nome de um arquivo** em `segredos/`; na
+Vercel não há disco, então vai o conteúdo do arquivo como texto, noutra
+variável. Trocar as duas é o erro mais fácil de cometer aqui.
 
-### O que muda quando está publicado
+**NÃO cadastre** `HOLYRICS_URL`, `HOLYRICS_TOKEN` nem `COREDJA_TOKEN_PONTE`.
+Um servidor na internet não alcança `192.168.x.x` — essa faixa é privada por
+norma (RFC 1918) e existe só dentro da rede da igreja. Não é questão de
+configuração: não há endereço a preencher que resolva. Quem entrega os
+comandos é o Conector.
 
-**Todo acesso passa a exigir login.** Os links secretos das áreas
-(`/a/cantina-SEGREDO`) foram removidos justamente por causa disto: publicados,
-eles dariam acesso de escrita a qualquer pessoa do mundo que os tivesse. Cada
-pessoa da Cantina e do Kids precisa de conta própria, criada em **Usuários**,
-com um departamento e a lista de com quem ela pode conversar.
+Os antigos `COREDJA_TOKEN_CANTINA` / `COREDJA_TOKEN_KIDS` também não vão —
+os links secretos foram removidos (ver "Contas e permissões").
 
-**O PC deixa de ser necessário — menos para o Holyrics.** Nada para ligar no
-domingo para o Coredja funcionar. Mas o Holyrics roda na máquina da igreja, e
-um servidor na internet **não alcança** um endereço `192.168.x.x`: essa faixa
-é privada por norma (RFC 1918) e existe só dentro daquela rede. Não é questão
-de configuração — não há endereço a configurar que resolva.
+### Depois de publicar
 
-Consequência prática: publicado, deixe `HOLYRICS_URL` e `HOLYRICS_TOKEN`
-**vazios**. Tudo continua funcionando, exceto projetar aviso e cronômetro
-automaticamente no telão, que voltam a ser feitos à mão no próprio Holyrics.
-Para recuperar isso é preciso algo rodando dentro da rede da igreja fazendo a
-ponte — ver "O que vem depois".
+- **Domínio próprio** (opcional): Vercel → Settings → Domains. Sem isso, o
+  endereço `.vercel.app` funciona igual.
+- A tela de Configurações passa a dizer **"Conectado pela ponte"** em vez de
+  "Conectado". Isso é o certo, não um erro: o servidor não alcança o Holyrics
+  direto, e o teste confirma o caminho que de fato está sendo usado.
+- **O Conector deixa de ser opcional.** Rodando local, ele só era necessário
+  para projetar arte; publicado, ele passa a ser o único caminho para o telão.
+  Confira `%LOCALAPPDATA%\CoredjaPonte\registro.txt` no PC do audiovisual: ele
+  grava uma linha toda vez que sobe.
 
-### Sobre índices
+### O gotcha que vale lembrar
 
-O Firestore exige um índice, criado à mão no Console, para consultas que
-filtram por um campo e ordenam por outro. Para evitar esse passo manual, todas
-as ordenações do Coredja acontecem em memória — com o volume de uma igreja,
-isso é instantâneo. Se um dia o histórico crescer muito, aí vale criar os
-índices e mover a ordenação para o banco.
+O `jose` está travado na v5 em `pnpm-workspace.yaml` (`overrides`). Isso não
+tem nada a ver com Netlify ou Vercel — é um bug de publicação do `jwks-rsa`,
+resolvido pelo pnpm no lockfile, e vale igual em qualquer hospedagem. Ver o
+comentário longo no fim de `next.config.ts` antes de mexer nisso.
+
+## O Conector do Telão (a ponte)
+
+**Pronto e em uso** — vive em `coredja-ponte`, com instalador Windows próprio.
+
+O Holyrics fica num endereço `192.168.x.x`, que só existe dentro da rede da
+igreja. O Conector inverte quem liga para quem: rodando no PC do audiovisual,
+ele escuta a fila de comandos no Firestore e executa cada um contra o Holyrics,
+ali do lado. Sobe sozinho com o Windows, sem janela, e grava o que fez em
+`%LOCALAPPDATA%\CoredjaPonte\registro.txt`.
+
+**Quando ele é obrigatório:**
+
+| O que se faz | Precisa do Conector? |
+|---|---|
+| Texto no telão, cronômetro (Coredja no mesmo PC do Holyrics) | Não |
+| **Aviso com arte**, em qualquer cenário | **Sim** |
+| Qualquer coisa, com o Coredja **publicado** | **Sim** |
+
+A arte sempre depende dele porque a API do Holyrics **não recebe imagem de
+fora** — a única forma é gravar o arquivo na pasta de Fotos, que é o que o
+Conector faz. Quando ele não está rodando e o aviso tem arte, a tela de Avisos
+mostra um selo dizendo que só o texto vai subir.
 
 ---
 
@@ -311,14 +352,6 @@ isso é instantâneo. Se um dia o histórico crescer muito, aí vale criar os
 **Aviso por cima do Holyrics.** Uma janelinha pequena, sempre no topo do
 monitor, que acende quando chega recado. É um programa à parte (Electron) e
 não depende do Holyrics para funcionar.
-
-**Ponte para o Holyrics.** A integração já existe e funciona quando o Coredja
-roda na rede da igreja (ver [`holyrics.ts`](src/lib/holyrics.ts) e a tela de
-**Configurações**). O que falta é fazê-la funcionar com o Coredja hospedado:
-um programa pequeno rodando no PC do audiovisual, que lê do Firestore o que
-precisa ir para o telão e repassa ao Holyrics ali mesmo, na rede local. Sobe
-junto com o Windows, sem ninguém digitar comando — o PC do audiovisual já
-fica ligado no domingo de qualquer forma, porque o Holyrics depende dele.
 
 ---
 

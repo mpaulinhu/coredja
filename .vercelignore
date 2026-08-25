@@ -1,0 +1,11 @@
+# Nunca subir segredos — mesma regra do .gitignore, repetida aqui porque o
+# deploy pela CLI (`vercel --prod`) envia a pasta local, e não o que está no
+# git. Sem isto, um `vercel` rodado daqui mandaria a chave de administrador
+# do Firebase junto.
+segredos/
+.env.local
+dados/
+
+# Peso morto no upload
+.next/
+node_modules/
