@@ -1,5 +1,5 @@
 import { estadoDoTelao } from '@/lib/holyrics-presenca';
-import { infoDaPonteAtiva } from '@/lib/telao-fila-store';
+import { arteNoArDoAviso, infoDaPonteAtiva } from '@/lib/telao-fila-store';
 import { holyricsConfigurado, MOTIVO_IMAGEM_NAO_SUPORTADA } from '@/lib/holyrics';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 
@@ -25,6 +25,10 @@ export const dynamic = 'force-dynamic';
  *
  * A sonda tem cache curto e prazo de 1,5s (ver `holyrics-presenca.ts`), então
  * esta rota continua barata mesmo consultada por várias telas ao abrir.
+ *
+ * `arteNoArId`: qual aviso tem a arte no telão agora, ou `null` — é o que
+ * decide, na tela de Avisos, entre mostrar "Projetar a arte agora" ou "Tirar
+ * a arte do telão" para o aviso selecionado. Ver `registrarArteNoAr`.
  */
 export async function GET(request: Request) {
   const pessoa = await pessoaDaRequisicao(request);
@@ -32,10 +36,11 @@ export async function GET(request: Request) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
 
-  const [configurado, estado, ponte] = await Promise.all([
+  const [configurado, estado, ponte, arteNoArId] = await Promise.all([
     holyricsConfigurado(),
     estadoDoTelao(),
     infoDaPonteAtiva(),
+    arteNoArDoAviso(),
   ]);
 
   // O Conector é a ÚNICA forma de projetar arte: a API do Holyrics não recebe
@@ -49,5 +54,6 @@ export async function GET(request: Request) {
     motivoImagem: MOTIVO_IMAGEM_NAO_SUPORTADA,
     conectorAtivo: ponte !== null,
     conectorComputador: ponte?.computador ?? null,
+    arteNoArId,
   });
 }

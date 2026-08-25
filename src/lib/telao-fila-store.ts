@@ -29,6 +29,7 @@ const VALIDADE_DO_SINAL_MS = 45_000;
 
 const DOC_SINAL = 'ponte';
 const COLECAO_SINAL = 'telao_estado';
+const DOC_ARTE = 'arte';
 
 /**
  * Enfileira um comando. Devolve `false` se não deu para gravar.
@@ -149,6 +150,36 @@ export async function registrarSinalDaPonte(
     .collection(COLECAO_SINAL)
     .doc(DOC_SINAL)
     .set({ ...extras, vistaEm: new Date().toISOString() }, { merge: true });
+}
+
+/**
+ * Marca (ou desmarca) qual aviso tem a arte no telão agora.
+ *
+ * A arte, uma vez projetada, é estado do HOLYRICS, não do aviso — por isso
+ * não vive em `avisos-store.ts` como `noAr`. Mas a tela de Avisos precisa
+ * saber "a arte deste aviso está no ar?" para trocar "Projetar a arte agora"
+ * por "Tirar a arte do telão", então o servidor grava esse ponteiro aqui.
+ *
+ * Não é garantia de verdade absoluta (alguém pode tirar a arte pelo próprio
+ * Holyrics, sem passar pelo Coredja) — é o melhor que o servidor sabe, e o
+ * mesmo tipo de aproximação que `noAr` já aceita para o texto.
+ */
+export async function registrarArteNoAr(avisoId: string | null): Promise<void> {
+  await getFirestoreDb()
+    .collection(COLECAO_SINAL)
+    .doc(DOC_ARTE)
+    .set({ avisoId }, { merge: true });
+}
+
+/** Qual aviso tem a arte no telão agora, ou `null` se nenhum. */
+export async function arteNoArDoAviso(): Promise<string | null> {
+  try {
+    const doc = await getFirestoreDb().collection(COLECAO_SINAL).doc(DOC_ARTE).get();
+    const avisoId = (doc.data() ?? {}).avisoId;
+    return typeof avisoId === 'string' ? avisoId : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Uma linha do log da ponte, pronta para a tela de Configurações exibir. */

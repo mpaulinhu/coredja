@@ -50,6 +50,11 @@ export type TipoDeComando =
   | 'cronometro-somar'
   | 'aviso-projetar'
   | 'aviso-limpar'
+  /**
+   * Projeta só a arte, sem tocar no painel de comunicação (o texto da tela
+   * de retorno) — ver o comentário sobre `arteProjetar` em `dadosDoComando`.
+   */
+  | 'arte-projetar'
   /** Tira do telão a arte que está sendo exibida (só a ponte sabe fazer). */
   | 'arte-fechar'
   | 'aviso-fila';
@@ -143,6 +148,17 @@ export const dadosDoComando = {
     ...(imagemUrl && projetarImagem ? { projetarImagem: true } : {}),
   }),
   avisoLimpar: () => ({}),
+  /**
+   * Projeta só a arte no telão, sem mandar texto nenhum ao painel de
+   * comunicação. Separado de `aviso` desde 25/08/2026: antes, todo envio
+   * (mesmo "Projetar a arte agora") mandava o texto do aviso junto para a
+   * tela de retorno — os dois botões da tela de Avisos precisavam de ações
+   * genuinamente independentes, cada um controlando só a sua metade.
+   */
+  arteProjetar: (imagemUrl: string, imagemNome?: string) => ({
+    imagem: imagemUrl,
+    ...(imagemNome ? { imagemNome } : {}),
+  }),
   arteFechar: () => ({}),
 } as const;
 
@@ -162,6 +178,8 @@ export function descreverComando(comando: ComandoDoTelao): string {
       return `Projetar${d.imagem ? ' (com imagem)' : ''}: ${String(d.titulo || d.texto || '').slice(0, 40)}`;
     case 'aviso-limpar':
       return 'Tirar o texto da tela de retorno';
+    case 'arte-projetar':
+      return 'Projetar a arte no telão';
     case 'arte-fechar':
       return 'Tirar a arte do telão';
     case 'aviso-fila':

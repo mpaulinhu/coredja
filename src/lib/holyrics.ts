@@ -249,6 +249,49 @@ export async function enviarAvisoAoHolyrics(
 }
 
 /**
+ * Projeta SÓ a arte no telão — sem tocar no painel de comunicação (a tela de
+ * retorno, com o texto).
+ *
+ * Separada de `enviarAvisoAoHolyrics` desde 25/08/2026: antes, "Projetar a
+ * arte agora" chamava a mesma função que projeta texto, e todo envio manda
+ * `SetTextCommunicationPanel` incondicionalmente — clicar só na arte também
+ * publicava o aviso na tela de retorno, sem ninguém ter pedido isso. Na tela
+ * de Avisos os dois botões (retorno e arte) têm peso visual igual porque são
+ * ações igualmente independentes; esta função é o que torna isso verdade do
+ * lado do servidor.
+ *
+ * A API do Holyrics não recebe imagem de fora (mesma limitação de sempre) —
+ * só a ponte projeta arte de fato, então esta função sempre prefere a fila,
+ * nunca tenta o caminho direto.
+ */
+export async function projetarArteDoAviso(
+  imagem: ImagemDoAviso,
+): Promise<ResultadoHolyrics> {
+  const config = await configHolyrics();
+  if (!config) return { estado: 'nao-configurado' };
+
+  if (!(await ponteEstaViva())) {
+    return {
+      estado: 'falhou',
+      motivo: MOTIVO_IMAGEM_NAO_SUPORTADA,
+    };
+  }
+
+  const enfileirou = await enfileirarComando(
+    'arte-projetar',
+    dadosDoComando.arteProjetar(imagem.url, imagem.nomeArquivo),
+  );
+
+  if (!enfileirou) {
+    return {
+      estado: 'falhou',
+      motivo: 'Não foi possível deixar o comando para o computador do audiovisual.',
+    };
+  }
+  return { estado: 'enviado' };
+}
+
+/**
  * Põe o aviso na fila do Holyrics, sem projetar nada.
  *
  * Diferente de `enviarAvisoAoHolyrics`, que joga o texto no telão na hora:

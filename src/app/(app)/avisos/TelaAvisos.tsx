@@ -252,19 +252,12 @@ export function TelaAvisos() {
   const criar = useCallback((form: FormData) => chamar('/api/avisos', 'POST', form), [chamar]);
   const remover = useCallback((id: string) => chamar(`/api/avisos/${id}`, 'DELETE'), [chamar]);
 
-  /**
-   * Publicar/ocultar traz junto o que aconteceu do lado do Holyrics.
-   *
-   * `projetarImagem` só tem efeito num aviso COM arte: manda o Holyrics jogar
-   * a imagem no telão na mesma hora, em vez de apenas deixar o arquivo pronto
-   * na pasta de Fotos dele para quem está na cabine exibir. Ver
-   * `dadosDoComando.aviso` em `telao-fila.ts`.
-   */
+  /** Publicar/ocultar o TEXTO na tela de retorno — nunca mexe na arte. */
   const mexerNoTelao = useCallback(
-    async (id: string, publicando: boolean, projetarImagem = false) => {
+    async (id: string, publicando: boolean) => {
       setRecado(null);
       const dados = (await chamar(
-        `/api/avisos/${id}/telao${publicando && projetarImagem ? '?projetarImagem=1' : ''}`,
+        `/api/avisos/${id}/telao`,
         publicando ? 'POST' : 'DELETE',
       )) as RetornoTelao | null;
       if (!dados) return;
@@ -286,6 +279,30 @@ export function TelaAvisos() {
       );
     },
     [chamar],
+  );
+
+  /**
+   * Projeta a ARTE de um aviso — nunca mexe no texto da tela de retorno.
+   *
+   * Ação irmã de `fecharArte`, ambas do lado da arte: uma põe, a outra tira.
+   * Rota própria (`/api/avisos/[id]/arte`), separada da que publica texto,
+   * desde 25/08/2026 — ver o comentário em `projetarArteDoAviso`.
+   */
+  const projetarArte = useCallback(
+    async (id: string) => {
+      setRecado(null);
+      const dados = (await chamar(`/api/avisos/${id}/arte`, 'POST')) as RetornoTelao | null;
+      if (!dados) return;
+
+      const holyrics = dados.holyrics;
+      if (!holyrics || holyrics.estado === 'enviado') {
+        setRecado('Arte projetada no telão.');
+        telao.recarregar();
+        return;
+      }
+      setRecado(`Não foi possível projetar a arte. ${holyrics.motivo ?? ''}`.trim());
+    },
+    [chamar, telao],
   );
 
   /** Manda para a fila do Holyrics sem projetar — quem opera decide a hora. */
@@ -330,12 +347,13 @@ export function TelaAvisos() {
     const holyrics = dados.holyrics;
     if (!holyrics || holyrics.estado === 'enviado') {
       setRecado('Arte retirada do telão.');
+      telao.recarregar();
       return;
     }
     setRecado(
       `Não foi possível tirar a arte do telão. ${holyrics.motivo ?? ''}`.trim(),
     );
-  }, [chamar]);
+  }, [chamar, telao]);
 
   const visiveis = useMemo(
     () => (avisos ?? []).filter((a) => passaNoFiltro(a, filtro, hoje)),
@@ -485,9 +503,18 @@ export function TelaAvisos() {
               selecionado, então some para não publicar a coisa errada. */}
           {!digitando && selecionado && (
             <div className="flex flex-wrap gap-2.5 px-5 pb-5 sm:px-6 sm:pb-6">
+              {/* Tela de retorno e arte são DUAS ações independentes, com o
+                  MESMO peso visual — cada uma liga/desliga a sua própria
+                  coisa, sem afetar a outra. Antes eram um botão principal
+                  (retorno) e um secundário (arte), o que sugeria uma
+                  hierarquia que não existe: publicar a arte sem tocar no
+                  texto é tão comum quanto o contrário. `min-w-[220px]` evita
+                  os dois espremerem a ponto de quebrar o texto no meio de
+                  uma palavra, mas ainda colapsa para duas linhas no celular
+                  via `flex-wrap` do container. */}
               <BotaoPrincipal
                 onClick={() => mexerNoTelao(selecionado.id, !selecionado.noAr)}
-                className="min-w-0 flex-1 text-sm sm:h-14"
+                className="min-w-[220px] flex-1 text-sm sm:h-14"
                 style={
                   selecionado.noAr
                     ? {
@@ -505,27 +532,35 @@ export function TelaAvisos() {
                     : 'Publicar no telão'}
               </BotaoPrincipal>
 
-              {/* Com arte, projetar a imagem é uma ação À PARTE do botão
-                  principal: o normal é a arte só ficar pronta na pasta de
-                  Fotos do Holyrics, e quem está na cabine exibir na hora
-                  certa. Este botão é para o caso "põe isso no telão agora". */}
-              {holyricsLigado && selecionado.imagem && !selecionado.noAr && (
-                <BotaoSecundario
-                  onClick={() => mexerNoTelao(selecionado.id, true, true)}
-                  className="text-sm sm:h-14"
+              {/* Só existe se o aviso TEM arte — sem imagem não há o que
+                  projetar aqui, e o botão nem aparece. "Tirar" só troca
+                  quando ESTA arte está de fato no ar (`arteNoArId` compara
+                  com o id do aviso selecionado): a arte é estado do
+                  Holyrics, não deste aviso — outra pessoa pode ter posto
+                  outra coisa no telão depois, e "Tirar" não pode prometer
+                  tirar o que já não é mais o que está lá. */}
+              {holyricsLigado && selecionado.imagem && (
+                <BotaoPrincipal
+                  onClick={() =>
+                    telao.arteNoArId === selecionado.id
+                      ? fecharArte()
+                      : projetarArte(selecionado.id)
+                  }
+                  className="min-w-[220px] flex-1 text-sm sm:h-14"
+                  style={
+                    telao.arteNoArId === selecionado.id
+                      ? {
+                          background: 'var(--borda-forte)',
+                          color: 'var(--texto)',
+                          boxShadow: 'none',
+                        }
+                      : undefined
+                  }
                 >
-                  Projetar a arte agora
-                </BotaoSecundario>
-              )}
-
-              {/* Sempre disponível quando há Holyrics, e não só depois de
-                  projetar por aqui: a arte no telão pode ter sido posta por
-                  outro aviso, ou pelo próprio Holyrics. Quem está limpando a
-                  tela quer limpar a tela, não caçar de onde veio a imagem. */}
-              {holyricsLigado && (
-                <BotaoSecundario onClick={fecharArte} className="text-sm sm:h-14">
-                  Tirar a arte do telão
-                </BotaoSecundario>
+                  {telao.arteNoArId === selecionado.id
+                    ? 'Tirar a arte do telão'
+                    : 'Projetar a arte agora'}
+                </BotaoPrincipal>
               )}
 
               {holyricsLigado && !ehSoImagem(selecionado) && (

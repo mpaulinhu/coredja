@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
 
 /**
@@ -34,6 +34,13 @@ interface Status {
    */
   conectorAtivo: boolean;
   conectorComputador: string | null;
+  /**
+   * Qual aviso tem a arte no telão agora, ou `null` se nenhum.
+   *
+   * Decide, na tela de Avisos, se o botão de arte mostra "Projetar a arte
+   * agora" ou "Tirar a arte do telão" — ver `registrarArteNoAr` no servidor.
+   */
+  arteNoArId: string | null;
 }
 
 const INICIAL: Status = {
@@ -43,6 +50,7 @@ const INICIAL: Status = {
   carregando: true,
   conectorAtivo: false,
   conectorComputador: null,
+  arteNoArId: null,
 };
 
 /**
@@ -52,48 +60,65 @@ const INICIAL: Status = {
  * Ordem do Culto precisa da mesma informação, duplicar a busca deixaria as
  * duas telas livres para divergir em detalhes (tratamento de erro, o que
  * fazer enquanto carrega) sem que ninguém percebesse.
+ *
+ * `recarregar` existe para depois de uma ação que muda `arteNoArId` (projetar
+ * ou tirar a arte): sem ele, o botão ficaria preso no rótulo antigo até um F5,
+ * porque a busca original só roda uma vez, ao montar.
  */
-export function useEstadoDoTelao(): Status {
+export function useEstadoDoTelao(): Status & { recarregar: () => void } {
   const [status, setStatus] = useState<Status>(INICIAL);
 
-  useEffect(() => {
-    let vivo = true;
-    (async () => {
-      const cabecalho = await cabecalhoDeAutorizacao();
-      if (!cabecalho || !vivo) return;
+  const buscar = useCallback(async (vivoRef: { atual: boolean }) => {
+    const cabecalho = await cabecalhoDeAutorizacao();
+    if (!cabecalho || !vivoRef.atual) return;
 
-      const resp = await fetch('/api/holyrics/status', { headers: cabecalho });
-      if (!resp.ok || !vivo) return;
+    const resp = await fetch('/api/holyrics/status', { headers: cabecalho });
+    if (!resp.ok || !vivoRef.atual) return;
 
-      const dados = (await resp.json()) as {
-        configurado?: boolean;
-        estado?: EstadoDoTelao;
-        motivoImagem?: string;
-        conectorAtivo?: boolean;
-        conectorComputador?: string | null;
-      };
-      if (!vivo) return;
-
-      setStatus({
-        estado: dados.estado ?? 'nao-configurado',
-        configurado: dados.configurado === true,
-        motivoImagem: dados.motivoImagem ?? '',
-        carregando: false,
-        conectorAtivo: dados.conectorAtivo === true,
-        conectorComputador: dados.conectorComputador ?? null,
-      });
-    })().catch(() => {
-      // A integração é opcional: não saber como está o telão não pode
-      // quebrar a tela nem impedir de operar o culto à mão.
-      if (vivo) setStatus((s) => ({ ...s, carregando: false }));
-    });
-
-    return () => {
-      vivo = false;
+    const dados = (await resp.json()) as {
+      configurado?: boolean;
+      estado?: EstadoDoTelao;
+      motivoImagem?: string;
+      conectorAtivo?: boolean;
+      conectorComputador?: string | null;
+      arteNoArId?: string | null;
     };
+    if (!vivoRef.atual) return;
+
+    setStatus({
+      estado: dados.estado ?? 'nao-configurado',
+      configurado: dados.configurado === true,
+      motivoImagem: dados.motivoImagem ?? '',
+      carregando: false,
+      conectorAtivo: dados.conectorAtivo === true,
+      conectorComputador: dados.conectorComputador ?? null,
+      arteNoArId: dados.arteNoArId ?? null,
+    });
   }, []);
 
-  return status;
+  useEffect(() => {
+    const vivoRef = { atual: true };
+    // O `await` dentro da IIFE não é decorativo — mesmo motivo de
+    // `TelaConfiguracoes`: sem ele o lint lê a chamada como `setState`
+    // síncrono dentro do efeito.
+    (async () => {
+      await buscar(vivoRef).catch(() => {
+        // A integração é opcional: não saber como está o telão não pode
+        // quebrar a tela nem impedir de operar o culto à mão.
+        if (vivoRef.atual) setStatus((s) => ({ ...s, carregando: false }));
+      });
+    })();
+
+    return () => {
+      vivoRef.atual = false;
+    };
+  }, [buscar]);
+
+  const recarregar = useCallback(() => {
+    void buscar({ atual: true });
+  }, [buscar]);
+
+  return { ...status, recarregar };
 }
 
 /**

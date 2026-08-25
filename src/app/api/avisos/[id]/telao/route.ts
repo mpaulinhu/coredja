@@ -41,14 +41,14 @@ export async function POST(
     return Response.json({ erro: 'Aviso não encontrado.' }, { status: 404 });
   }
 
-  // `?projetarImagem=1` manda o Holyrics jogar a arte no telão na mesma hora.
-  // Sem ele (o padrão), a imagem apenas fica pronta na pasta de Fotos, para
-  // quem está na cabine exibir na hora certa — ver `dadosDoComando.aviso`.
-  const projetarImagem =
-    new URL(request.url).searchParams.get('projetarImagem') === '1';
-
   const avisos = await avisosStore.publicar(id);
-  const holyrics = await enviarAvisoAoHolyrics(aviso, projetarImagem);
+  // Nunca projeta a arte por aqui, mesmo quando o aviso tem imagem: esta
+  // rota é só a tela de retorno (o texto). Quem quer a arte no telão usa
+  // `/api/avisos/[id]/arte`, uma ação à parte desde 25/08/2026 — ver o
+  // comentário em `projetarArteDoAviso`. Com imagem e sem projetar, o
+  // arquivo ainda vai para a pasta de Fotos do Holyrics, pronto para quem
+  // está na cabine exibir na hora certa.
+  const holyrics = await enviarAvisoAoHolyrics(aviso, false);
 
   return Response.json({ avisos, holyrics: paraTela(holyrics) });
 }
