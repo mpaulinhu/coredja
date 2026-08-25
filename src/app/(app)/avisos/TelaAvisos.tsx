@@ -202,6 +202,11 @@ export function TelaAvisos() {
   // agora?) decide se eles ganham o aviso de desconectado ao lado.
   const telao = useEstadoDoTelao();
   const holyricsLigado = telao.configurado;
+  // Extraído do objeto porque `telao` é recriado a cada render (o hook devolve
+  // `{...status, recarregar}`): usá-lo inteiro como dependência refaria os
+  // `useCallback` abaixo sempre, anulando a memoização. `recarregar` em si é
+  // estável.
+  const recarregarTelao = telao.recarregar;
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [mostrarPassados, setMostrarPassados] = useState(false);
@@ -216,7 +221,9 @@ export function TelaAvisos() {
    * primeiro clique pegou. `disabled` durante o processamento evita clique
    * duplo, e o texto do botão diz que está em andamento.
    */
-  const [processando, setProcessando] = useState<'retorno' | 'arte' | null>(null);
+  const [processando, setProcessando] = useState<'retorno' | 'arte' | 'fila' | null>(
+    null,
+  );
 
   // O que está sendo digitado no formulário, espelhado aqui para a prévia
   // conseguir mostrá-lo ao vivo. Mora no pai porque prévia e formulário são
@@ -313,19 +320,21 @@ export function TelaAvisos() {
       const holyrics = dados.holyrics;
       if (!holyrics || holyrics.estado === 'enviado') {
         setRecado('Arte projetada no telão.');
-        telao.recarregar();
+        recarregarTelao();
         return;
       }
       setRecado(`Não foi possível projetar a arte. ${holyrics.motivo ?? ''}`.trim());
     },
-    [chamar, telao],
+    [chamar, recarregarTelao],
   );
 
   /** Manda para a fila do Holyrics sem projetar — quem opera decide a hora. */
   const mandarParaFila = useCallback(
     async (id: string) => {
       setRecado(null);
+      setProcessando('fila');
       const dados = (await chamar(`/api/avisos/${id}/fila`, 'POST')) as RetornoTelao | null;
+      setProcessando(null);
       if (!dados) return;
 
       const holyrics = dados.holyrics;
@@ -365,13 +374,13 @@ export function TelaAvisos() {
     const holyrics = dados.holyrics;
     if (!holyrics || holyrics.estado === 'enviado') {
       setRecado('Arte retirada do telão.');
-      telao.recarregar();
+      recarregarTelao();
       return;
     }
     setRecado(
       `Não foi possível tirar a arte do telão. ${holyrics.motivo ?? ''}`.trim(),
     );
-  }, [chamar, telao]);
+  }, [chamar, recarregarTelao]);
 
   const visiveis = useMemo(
     () => (avisos ?? []).filter((a) => passaNoFiltro(a, filtro, hoje)),
@@ -592,12 +601,33 @@ export function TelaAvisos() {
                 </BotaoPrincipal>
               )}
 
+              {/* A ESCAPATÓRIA: há arte no telão, mas não é a deste aviso.
+                  Sem isto a arte pode ficar presa lá sem nenhum botão que a
+                  tire — basta o aviso que a projetou ser apagado, ou alguém
+                  selecionar outro aviso. Era o que o botão antigo ("Tirar a
+                  arte" sempre visível) garantia por vir sem condição
+                  nenhuma; a versão por aviso trouxe clareza e levou junto
+                  essa saída, que volta aqui em tom secundário — limpar o
+                  telão é conserto, não a ação principal de ninguém. */}
+              {holyricsLigado &&
+                telao.arteNoArId !== null &&
+                telao.arteNoArId !== selecionado.id && (
+                  <BotaoSecundario
+                    onClick={fecharArte}
+                    disabled={processando !== null}
+                    className="text-sm sm:h-14"
+                  >
+                    {processando === 'arte' ? 'Só um instante…' : 'Limpar a arte do telão'}
+                  </BotaoSecundario>
+                )}
+
               {holyricsLigado && !ehSoImagem(selecionado) && (
                 <BotaoSecundario
                   onClick={() => mandarParaFila(selecionado.id)}
+                  disabled={processando !== null}
                   className="text-sm sm:h-14"
                 >
-                  Avisar audiovisual
+                  {processando === 'fila' ? 'Só um instante…' : 'Avisar audiovisual'}
                 </BotaoSecundario>
               )}
 

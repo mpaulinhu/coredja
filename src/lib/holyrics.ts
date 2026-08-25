@@ -229,9 +229,8 @@ export async function enviarAvisoAoHolyrics(
   // vindo de fora. O painel de comunicação aceita, que é o que precisamos.
   //
   // `configHolyrics()` (com as sondas de rede) só é chamado DENTRO da
-  // closure, que só roda se `entregar()` decidir pelo caminho direto —
-  // publicado, com imagem, isso nunca acontece (ver `preferirFila` abaixo),
-  // então o custo das sondas nem existe nesse caso.
+  // closure, que `entregar()` só executa quando não há ponte viva — publicado,
+  // isso nunca acontece, e o custo das sondas some junto.
   const { resultado, pelaFila } = await entregar(
     async () => {
       const config = await configHolyrics();
@@ -248,9 +247,6 @@ export async function enviarAvisoAoHolyrics(
         projetarImagem,
       ),
     },
-    // Com imagem, a ponte é o único caminho que leva a arte — ver a seção
-    // "A EXCEÇÃO" no comentário de `entregar`.
-    Boolean(aviso.imagem),
   );
 
   // O caminho DIRETO nunca leva imagem — `SetTextCommunicationPanel` só
@@ -396,23 +392,14 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
 export async function fecharArteNoHolyrics(): Promise<ResultadoHolyrics> {
   if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
-  // `preferirFila: true` — mesma exceção de `projetarArteDoAviso`. Fechar a
-  // arte é uma ação do MESMO tipo que projetá-la: só a ponte, rodando na
-  // rede da igreja, alcança o Holyrics de fato. Sem isto, `entregar()`
-  // tentava o caminho direto primeiro (que publicado SEMPRE falha por
-  // timeout de rede) antes de cair na fila — o mesmo atraso de vários
-  // segundos que já tinha sido corrigido para "projetar", mas não para
-  // "tirar".
-  const { resultado } = await entregar(
+  return entregarResultado(
     async () => {
       const config = await configHolyrics();
       if (!config) return { estado: 'nao-configurado' };
       return chamar(config, 'CloseCurrentPresentation', {});
     },
     { tipo: 'arte-fechar', dados: {} },
-    true,
   );
-  return resultado;
 }
 
 /**
@@ -428,45 +415,42 @@ export async function fecharArteNoHolyrics(): Promise<ResultadoHolyrics> {
  *   cabeçalho de `telao-fila.ts`), `executar()` falha por rede, e o comando
  *   vai para a fila — a ponte no PC do audiovisual pega e executa ali.
  *
- * A ORDEM importa e é deliberada: tenta direto PRIMEIRO. O caminho direto é
- * instantâneo e devolve o resultado real do Holyrics ("token recusado", "ação
- * não liberada"), coisa que a fila não tem como devolver — quando o comando é
- * enfileirado, a resposta só diz que foi entregue à ponte, não que deu certo
- * lá. Preferir a fila quando o direto funciona trocaria diagnóstico preciso
- * por incerteza, de graça.
- *
- * Só desvia para a fila em falha de REDE (o `catch`). Um Holyrics que
- * respondeu e recusou não é caso de ponte: enfileirar repetiria a recusa
- * alguns segundos depois, agora sem a mensagem que explica o motivo.
- *
  * ────────────────────────────────────────────────────────────────────────────
- * A EXCEÇÃO: `preferirFila`
+ * A ORDEM: A PONTE VIVA DECIDE
  * ────────────────────────────────────────────────────────────────────────────
- * Aviso com IMAGEM inverte a ordem, porque o raciocínio acima pressupõe que
- * os dois caminhos fazem a mesma coisa — e para imagem eles não fazem. O
- * caminho direto NÃO consegue projetar arte (a API não recebe imagem de
- * fora); só a ponte consegue, salvando o arquivo na pasta de Fotos do
- * Holyrics. Tentar direto primeiro nesse caso seria escolher, de propósito, o
- * único caminho que não faz o que a pessoa pediu.
+ * Ponte viva → fila. Sem ponte → direto. Não é preferência: é que cada uma
+ * delas só existe num dos dois cenários, e a presença de sinal de vida é o
+ * que os distingue sem que ninguém precise configurar nada.
  *
- * Isso aparece exatamente quando o Coredja roda na MESMA rede do Holyrics
- * (`Coredja.bat`, ou `localhost` em desenvolvimento): o direto funciona, o
- * `catch` nunca dispara, e a ponte — instalada e viva ali do lado — nunca era
- * consultada. O sintoma era "publiquei com imagem e só o texto foi", sem
- * pista de que existia um caminho que teria funcionado.
+ * A ponte só é instalada onde o Coredja NÃO alcança o Holyrics (o cenário
+ * publicado). Na rede da igreja (`Coredja.bat`) não há ponte para dar sinal,
+ * e o direto — que ali funciona — segue sendo o caminho, com o diagnóstico
+ * preciso que ele dá ("token recusado", "ação não liberada"), coisa que a
+ * fila não tem como devolver.
+ *
+ * Uma versão anterior tentava o direto PRIMEIRO em todos os casos, pelo valor
+ * desse diagnóstico. O custo, publicado, era ~11s por clique: `configHolyrics()`
+ * sonda o endereço configurado (3s) e o fallback `localhost` (3s), e só então
+ * `chamar()` faz o fetch (5s) — os três estourando por timeout, sempre, antes
+ * de o `catch` finalmente cair na fila. O diagnóstico que se ganhava era sobre
+ * um caminho que nunca teria funcionado.
+ *
+ * Aviso com IMAGEM já dependia disso por outro motivo: o direto NÃO projeta
+ * arte (a API não recebe imagem de fora), só a ponte, salvando o arquivo na
+ * pasta de Fotos do Holyrics. Sem ponte, o direto ainda leva o texto, e quem
+ * chamou relata a arte que ficou de fora.
  */
 async function entregar(
   executar: () => Promise<ResultadoHolyrics>,
   comando: { tipo: TipoDeComando; dados: Record<string, unknown> },
-  preferirFila = false,
 ): Promise<{ resultado: ResultadoHolyrics; pelaFila: boolean }> {
-  // Só vale a pena consultar a ponte se ela puder mesmo assumir; sem ponte
-  // viva o caminho direto segue sendo o melhor disponível (mesmo sem imagem).
-  if (preferirFila && (await ponteEstaViva())) {
+  // Sem ponte viva, o direto abaixo é o único caminho — inclusive para aviso
+  // com arte, onde ele ao menos leva o texto e quem chamou relata a arte que
+  // ficou de fora (`MOTIVO_IMAGEM_FICOU_DE_FORA`).
+  if (await ponteEstaViva()) {
     const enfileirou = await enfileirarComando(comando.tipo, comando.dados);
     if (enfileirou) return { resultado: { estado: 'enviado' }, pelaFila: true };
-    // Não conseguiu enfileirar: cai para o direto abaixo, que ao menos
-    // projeta o texto.
+    // Não conseguiu enfileirar: cai para o direto abaixo, que ao menos tenta.
   }
 
   try {

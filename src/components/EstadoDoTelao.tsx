@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cabecalhoDeAutorizacao } from '@/lib/auth-cliente';
 
 /**
@@ -68,12 +68,24 @@ const INICIAL: Status = {
 export function useEstadoDoTelao(): Status & { recarregar: () => void } {
   const [status, setStatus] = useState<Status>(INICIAL);
 
-  const buscar = useCallback(async (vivoRef: { atual: boolean }) => {
+  /**
+   * Se este componente ainda está montado.
+   *
+   * Um `ref` só, compartilhado pela busca inicial E por `recarregar` — e não
+   * um objeto novo por chamada. `recarregar` é disparado por um clique
+   * (projetar/tirar a arte), e nada impede a pessoa de sair da tela antes de
+   * a resposta chegar; sem o ref compartilhado, essa resposta tardia
+   * escreveria estado num componente já desmontado, e a guarda do efeito
+   * seria decorativa.
+   */
+  const montado = useRef(true);
+
+  const buscar = useCallback(async () => {
     const cabecalho = await cabecalhoDeAutorizacao();
-    if (!cabecalho || !vivoRef.atual) return;
+    if (!cabecalho || !montado.current) return;
 
     const resp = await fetch('/api/holyrics/status', { headers: cabecalho });
-    if (!resp.ok || !vivoRef.atual) return;
+    if (!resp.ok || !montado.current) return;
 
     const dados = (await resp.json()) as {
       configurado?: boolean;
@@ -83,7 +95,7 @@ export function useEstadoDoTelao(): Status & { recarregar: () => void } {
       conectorComputador?: string | null;
       arteNoArId?: string | null;
     };
-    if (!vivoRef.atual) return;
+    if (!montado.current) return;
 
     setStatus({
       estado: dados.estado ?? 'nao-configurado',
@@ -97,25 +109,25 @@ export function useEstadoDoTelao(): Status & { recarregar: () => void } {
   }, []);
 
   useEffect(() => {
-    const vivoRef = { atual: true };
+    montado.current = true;
     // O `await` dentro da IIFE não é decorativo — mesmo motivo de
     // `TelaConfiguracoes`: sem ele o lint lê a chamada como `setState`
     // síncrono dentro do efeito.
     (async () => {
-      await buscar(vivoRef).catch(() => {
+      await buscar().catch(() => {
         // A integração é opcional: não saber como está o telão não pode
         // quebrar a tela nem impedir de operar o culto à mão.
-        if (vivoRef.atual) setStatus((s) => ({ ...s, carregando: false }));
+        if (montado.current) setStatus((s) => ({ ...s, carregando: false }));
       });
     })();
 
     return () => {
-      vivoRef.atual = false;
+      montado.current = false;
     };
   }, [buscar]);
 
   const recarregar = useCallback(() => {
-    void buscar({ atual: true });
+    void buscar();
   }, [buscar]);
 
   return { ...status, recarregar };
