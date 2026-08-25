@@ -76,7 +76,72 @@ export async function configHolyrics(): Promise<ConfigHolyrics | null> {
   const token = resolver(gravado.holyricsToken, process.env.HOLYRICS_TOKEN).valor;
 
   if (!url || !token) return null;
-  return { url, token };
+
+  // Mesmo fallback da ponte (ver `firestore.ts` de `coredja-ponte`): quando o
+  // Coredja roda no PRÓPRIO PC do Holyrics — que é o cenário do
+  // `Coredja.bat` na igreja — o IP digitado na tela envelhece sozinho (DHCP
+  // troca o número), e aí nenhum comando chega ao telão. `localhost` não
+  // muda em rede nenhuma.
+  //
+  // Rodando hospedado, ou noutra máquina da rede, o fallback nunca dispara:
+  // lá `localhost` é o próprio servidor, que não tem Holyrics, e a sonda
+  // falha — seguindo com o endereço configurado, como sempre foi.
+  const escolhida = await urlQueResponde(url, token);
+  return { url: escolhida, token };
+}
+
+/** Cache da URL escolhida, e para qual endereço configurado ela valia. */
+let urlResolvida: string | null = null;
+let urlResolvidaPara: string | null = null;
+
+/** Troca o host por `localhost`, mantendo esquema e porta. */
+function comHostLocal(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hostname = 'localhost';
+    return u.toString().replace(/\/+$/, '');
+  } catch {
+    return url;
+  }
+}
+
+/** Sonda barata (só leitura) para decidir qual endereço usar. */
+async function atendeEm(url: string, token: string): Promise<boolean> {
+  try {
+    const r = await fetch(
+      `${url}/api/GetCommunicationPanelInfo?token=${encodeURIComponent(token)}`,
+      { method: 'GET', signal: AbortSignal.timeout(3000), cache: 'no-store' },
+    );
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** O endereço configurado, ou `localhost` se ele não atender mais. */
+async function urlQueResponde(url: string, token: string): Promise<string> {
+  if (urlResolvida && urlResolvidaPara === url) {
+    if (await atendeEm(urlResolvida, token)) return urlResolvida;
+    urlResolvida = null;
+    urlResolvidaPara = null;
+  }
+
+  if (await atendeEm(url, token)) {
+    urlResolvida = url;
+    urlResolvidaPara = url;
+    return url;
+  }
+
+  const local = comHostLocal(url);
+  if (local !== url && (await atendeEm(local, token))) {
+    urlResolvida = local;
+    urlResolvidaPara = url;
+    return local;
+  }
+
+  // Nenhum atendeu: devolve o configurado, para o erro citar o que a pessoa
+  // digitou em vez de um `localhost` que ela nunca escreveu.
+  return url;
 }
 
 /** Se a integração está ligada — usado pela tela para explicar o que acontece. */
