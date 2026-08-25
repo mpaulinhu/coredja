@@ -1,4 +1,5 @@
 import { estadoDoTelao } from '@/lib/holyrics-presenca';
+import { infoDaPonteAtiva } from '@/lib/telao-fila-store';
 import { holyricsConfigurado, MOTIVO_IMAGEM_NAO_SUPORTADA } from '@/lib/holyrics';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 
@@ -31,14 +32,22 @@ export async function GET(request: Request) {
     return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
   }
 
-  const [configurado, estado] = await Promise.all([
+  const [configurado, estado, ponte] = await Promise.all([
     holyricsConfigurado(),
     estadoDoTelao(),
+    infoDaPonteAtiva(),
   ]);
 
+  // O Conector é a ÚNICA forma de projetar arte: a API do Holyrics não recebe
+  // imagem de fora, então o caminho direto sempre manda só o texto (ver
+  // MOTIVO_IMAGEM_NAO_SUPORTADA). Sem esta informação a tela não tinha como
+  // avisar ANTES — a pessoa clicava em "Projetar", o texto ia, a arte não, e
+  // nada explicava a diferença.
   return Response.json({
     configurado,
     estado,
     motivoImagem: MOTIVO_IMAGEM_NAO_SUPORTADA,
+    conectorAtivo: ponte !== null,
+    conectorComputador: ponte?.computador ?? null,
   });
 }

@@ -24,6 +24,16 @@ interface Status {
   motivoImagem: string;
   /** Enquanto a primeira resposta não chega, para a tela não piscar um aviso. */
   carregando: boolean;
+  /**
+   * Se o Conector do Telão está vivo agora.
+   *
+   * Separado de `estado` porque responde outra pergunta: `estado` é sobre o
+   * Holyrics atender; isto é sobre PROJETAR ARTE ser possível. A API do
+   * Holyrics não recebe imagem de fora, então só o Conector projeta arte —
+   * dá para estar com o telão conectado e mesmo assim a arte não subir.
+   */
+  conectorAtivo: boolean;
+  conectorComputador: string | null;
 }
 
 const INICIAL: Status = {
@@ -31,6 +41,8 @@ const INICIAL: Status = {
   configurado: false,
   motivoImagem: '',
   carregando: true,
+  conectorAtivo: false,
+  conectorComputador: null,
 };
 
 /**
@@ -57,6 +69,8 @@ export function useEstadoDoTelao(): Status {
         configurado?: boolean;
         estado?: EstadoDoTelao;
         motivoImagem?: string;
+        conectorAtivo?: boolean;
+        conectorComputador?: string | null;
       };
       if (!vivo) return;
 
@@ -65,6 +79,8 @@ export function useEstadoDoTelao(): Status {
         configurado: dados.configurado === true,
         motivoImagem: dados.motivoImagem ?? '',
         carregando: false,
+        conectorAtivo: dados.conectorAtivo === true,
+        conectorComputador: dados.conectorComputador ?? null,
       });
     })().catch(() => {
       // A integração é opcional: não saber como está o telão não pode
@@ -116,6 +132,52 @@ export function SeloDoTelao({
         style={{ background: 'var(--alerta)' }}
       />
       Telão desconectado — projete à mão
+    </span>
+  );
+}
+
+/**
+ * Aviso de que a ARTE não vai subir — só o texto.
+ *
+ * Separado de `SeloDoTelao` porque é outro problema, com outra correção: lá o
+ * Holyrics não responde e a saída é projetar à mão; aqui o Holyrics pode estar
+ * perfeito e ainda assim a arte não sobe, porque quem projeta arte é o
+ * Conector do Telão — a API do Holyrics não recebe imagem de fora.
+ *
+ * Foi exatamente isso que aconteceu no sábado 22/08/2026: o `registro.txt` da
+ * ponte não tem nenhuma linha daquele dia (e ela grava uma a cada subida,
+ * sempre), então o Conector não estava rodando. Quem publicou um aviso com
+ * arte viu o texto ir e a arte não, sem nada na tela explicando a diferença.
+ *
+ * Mesma regra de silêncio do `SeloDoTelao`: só aparece quando há arte em jogo
+ * E o Conector está ausente. Sem imagem, nada disto importa e o aviso seria
+ * ruído que se aprende a ignorar.
+ */
+export function SeloDoConector({
+  temImagem,
+  conectorAtivo,
+  carregando,
+}: {
+  /** Se o que vai ser publicado tem arte. Sem arte, o Conector é indiferente. */
+  temImagem: boolean;
+  conectorAtivo: boolean;
+  carregando: boolean;
+}) {
+  if (carregando || !temImagem || conectorAtivo) return null;
+
+  return (
+    <span
+      role="status"
+      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold"
+      style={{ color: 'var(--alerta)', background: 'var(--alerta-fundo)' }}
+      title="Só o Conector do Telão consegue pôr arte no telão (a API do Holyrics não recebe imagem de fora). Ele sobe sozinho com o Windows no computador do audiovisual — se não está rodando, confira se aquele PC está ligado e se o Conector foi instalado com a credencial do Firebase."
+    >
+      <span
+        aria-hidden
+        className="h-2 w-2 rounded-full"
+        style={{ background: 'var(--alerta)' }}
+      />
+      Conector desligado — a arte não vai subir, só o texto
     </span>
   );
 }

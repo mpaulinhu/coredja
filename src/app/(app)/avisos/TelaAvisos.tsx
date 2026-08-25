@@ -9,7 +9,7 @@ import { hojeLocal } from '@/lib/culto';
 import { getFirestoreCliente } from '@/lib/firebase-cliente';
 import { TAMANHO_MAXIMO_BYTES } from '@/lib/limites';
 import { BotaoPrincipal, BotaoSecundario, Numero, Rotulo, Selo } from '@/components/Interface';
-import { SeloDoTelao, useEstadoDoTelao } from '@/components/EstadoDoTelao';
+import { SeloDoConector, SeloDoTelao, useEstadoDoTelao } from '@/components/EstadoDoTelao';
 import {
   CabecalhoDaPrevia,
   DiasDaPrevia,
@@ -543,6 +543,18 @@ export function TelaAvisos() {
                   ver `SeloDoTelao`. */}
               <div className="w-full">
                 <SeloDoTelao estado={telao.estado} carregando={telao.carregando} />
+              </div>
+
+              {/* Outro problema, outra correção: o selo acima é o Holyrics
+                  fora do ar; este é a arte que não sobe porque o Conector
+                  não está rodando — e aí o Holyrics pode estar perfeito.
+                  Só aparece com arte em jogo. Ver `SeloDoConector`. */}
+              <div className="w-full">
+                <SeloDoConector
+                  temImagem={Boolean(selecionado.imagem)}
+                  conectorAtivo={telao.conectorAtivo}
+                  carregando={telao.carregando}
+                />
               </div>
             </div>
           )}
