@@ -101,6 +101,15 @@ export async function infoDaPonteAtiva(): Promise<{
   computador: string;
   versao?: string;
   holyricsOk: boolean;
+  /**
+   * Ações de escrita que a ponte sondou e encontrou BLOQUEADAS no Holyrics.
+   *
+   * Vazio significa "sondei e está tudo liberado"; `undefined` significa
+   * "esta ponte é antiga e nem sabe sondar" — os dois casos são diferentes
+   * e a tela precisa distingui-los, senão uma ponte velha pareceria uma
+   * instalação perfeita.
+   */
+  acoesBloqueadas?: string[];
 } | null> {
   try {
     const doc = await getFirestoreDb().collection(COLECAO_SINAL).doc(DOC_SINAL).get();
@@ -115,6 +124,11 @@ export async function infoDaPonteAtiva(): Promise<{
       computador: typeof dados.computador === 'string' ? dados.computador : 'computador desconhecido',
       versao: typeof dados.versao === 'string' ? dados.versao : undefined,
       holyricsOk: dados.holyricsOk === true,
+      acoesBloqueadas: Array.isArray(dados.acoesBloqueadas)
+        ? (dados.acoesBloqueadas as unknown[]).filter(
+            (x): x is string => typeof x === 'string',
+          )
+        : undefined,
     };
   } catch {
     return null;

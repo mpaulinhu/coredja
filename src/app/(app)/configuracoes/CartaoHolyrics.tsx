@@ -406,6 +406,15 @@ function ResultadoTeste({ resultado }: { resultado: ResultadoDoTeste }) {
       fundo: 'var(--alerta-fundo)',
       titulo: 'A ponte está rodando, mas não alcança o Holyrics.',
     },
+    // Vermelho, e não amarelo: diferente de "não alcancei" (que pode ser o
+    // Holyrics fechado numa terça-feira), isto é uma instalação que PARECE
+    // pronta e vai falhar no domingo. É exatamente o caso que fez alguém
+    // viajar até a igreja confiando num "conectado".
+    'sem-permissao': {
+      cor: 'var(--urgente)',
+      fundo: 'var(--urgente-fundo)',
+      titulo: 'Conectado, mas sem permissão para agir no telão.',
+    },
     recusado: {
       cor: 'var(--urgente)',
       fundo: 'var(--urgente-fundo)',
@@ -454,6 +463,28 @@ function ResultadoTeste({ resultado }: { resultado: ResultadoDoTeste }) {
           </strong>
           .
         </p>
+      )}
+      {resultado.estado === 'sem-permissao' && (
+        <div className="mt-1 space-y-2 text-[13px] leading-relaxed text-texto-suave">
+          <p>
+            O Holyrics respondeu e o token está certo — mas ele está{' '}
+            <strong>recusando as ações abaixo</strong>, e são elas que fazem o
+            trabalho de domingo:
+          </p>
+          <ul className="list-disc space-y-0.5 pl-5">
+            {resultado.acoesBloqueadas?.map((rotulo) => (
+              <li key={rotulo}>
+                <strong className="font-semibold text-texto-suave">{rotulo}</strong>
+              </li>
+            ))}
+          </ul>
+          <p>
+            No PC do Holyrics: <strong>Configurações → API Server → gerenciar
+            permissões</strong>, e marque cada uma na coluna{' '}
+            <strong>Local</strong>. O Holyrics não tem &quot;liberar tudo&quot; — é uma
+            por uma. Depois, teste de novo aqui.
+          </p>
+        </div>
       )}
       {resultado.estado === 'ponte-sem-holyrics' && (
         <div className="mt-1 space-y-2 text-[13px] leading-relaxed text-texto-suave">

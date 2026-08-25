@@ -28,6 +28,7 @@ export interface ResultadoDoTeste {
     | 'ok'
     | 'ok-pela-ponte'
     | 'ponte-sem-holyrics'
+    | 'sem-permissao'
     | 'recusado'
     | 'inalcancavel';
   motivo?: string;
@@ -35,6 +36,14 @@ export interface ResultadoDoTeste {
   painelNoAr?: boolean;
   /** Só em `ok-pela-ponte`: qual computador está servindo de ponte agora. */
   computador?: string;
+  /**
+   * Só em `sem-permissao`: os rótulos das ações que o Holyrics recusa.
+   *
+   * Vem em rótulo legível ("Projetar a arte do aviso") e não no nome da
+   * API: quem lê isto está na cabine e precisa saber o que parou, não o
+   * identificador interno.
+   */
+  acoesBloqueadas?: string[];
 }
 
 /** Uma pendência de configuração — o checklist do topo da tela. */

@@ -600,6 +600,92 @@ export function holyricsParaTela(
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /** O que o teste descobriu. Cada caso pede uma ação diferente de quem lê. */
+/**
+ * As ações de ESCRITA que o Coredja precisa ter liberadas no Holyrics.
+ *
+ * Cada uma precisa ser marcada à mão em Configurações → API Server →
+ * gerenciar permissões, uma por uma. Liberar uma não libera as outras, e o
+ * Holyrics não oferece nenhum "liberar tudo".
+ *
+ * `rotulo` é o que aparece na tela: quem está na cabine às 9h de domingo
+ * precisa saber o que parou de funcionar, não o nome interno da ação.
+ */
+const ACOES_DE_ESCRITA: { acao: string; rotulo: string }[] = [
+  { acao: 'SetTextCommunicationPanel', rotulo: 'Mandar aviso para a tela de retorno' },
+  { acao: 'ShowImage', rotulo: 'Projetar a arte do aviso' },
+  { acao: 'CloseCurrentPresentation', rotulo: 'Tirar a arte do telão' },
+  { acao: 'StartCountdownCommunicationPanel', rotulo: 'Ligar o cronômetro' },
+  { acao: 'StopCountdownCommunicationPanel', rotulo: 'Parar o cronômetro' },
+  { acao: 'SetCommunicationPanelSettings', rotulo: 'Limpar o rótulo do cronômetro' },
+  { acao: 'AddToPlaylist', rotulo: 'Pôr o aviso na fila do Holyrics' },
+];
+
+/**
+ * Descobre se uma ação de escrita está liberada SEM executá-la.
+ *
+ * O truque: o Holyrics confere a permissão ANTES de validar os campos do
+ * corpo. Mandando um corpo vazio `{}`:
+ *
+ * - ação NÃO liberada  → HTTP 401 `unauthorized action`
+ * - ação liberada      → HTTP 200 com `status: "error"` reclamando de campo
+ *                        faltando (ex.: `Field 'text' not found`)
+ *
+ * Ou seja, o erro de campo é a PROVA de que a permissão existe — e nada
+ * acontece no telão, que é o requisito para isto poder rodar durante o culto.
+ *
+ * O comportamento veio de uma observação real: ao descobrir que `ShowImage`
+ * pedia `file` e não `path`, a resposta foi `Field 'file' not found` com a
+ * ação já liberada; antes de liberá-la, a mesma chamada dava 401.
+ */
+async function permissaoLiberada(
+  config: ConfigHolyrics,
+  acao: string,
+): Promise<boolean | null> {
+  try {
+    const resposta = await fetch(
+      `${config.url}/api/${acao}?token=${encodeURIComponent(config.token)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
+        cache: 'no-store',
+      },
+    );
+
+    if (resposta.status === 401) return false;
+    if (!resposta.ok) return null;
+
+    const dados = (await resposta.json().catch(() => null)) as {
+      status?: string;
+      error?: string;
+    } | null;
+
+    // 200 + `unauthorized action` no corpo: algumas versões respondem assim
+    // em vez de 401. Os dois querem dizer a mesma coisa.
+    if (dados?.error && /unauthorized/i.test(dados.error)) return false;
+
+    return true;
+  } catch {
+    // Timeout ou rede: não dá para afirmar nada sobre a permissão.
+    return null;
+  }
+}
+
+/** Sonda todas as ações de escrita e devolve o rótulo das que faltam. */
+async function acoesBloqueadas(config: ConfigHolyrics): Promise<string[]> {
+  const veredictos = await Promise.all(
+    ACOES_DE_ESCRITA.map(async ({ acao, rotulo }) => ({
+      rotulo,
+      liberada: await permissaoLiberada(config, acao),
+    })),
+  );
+
+  // `null` (indeterminado) NÃO entra na lista: acusar bloqueio sem ter
+  // certeza mandaria a pessoa mexer em permissão que já estava certa.
+  return veredictos.filter((v) => v.liberada === false).map((v) => v.rotulo);
+}
+
 export type DiagnosticoHolyrics =
   | { estado: 'nao-configurado' }
   /** Falou, respondeu, token aceito. */
@@ -626,6 +712,16 @@ export type DiagnosticoHolyrics =
   | { estado: 'ponte-sem-holyrics'; computador: string }
   /** Chegou no Holyrics, mas ele recusou o token ou a permissão da ação. */
   | { estado: 'recusado'; motivo: string }
+  /**
+   * O Holyrics responde e o token vale, MAS ações de ESCRITA que o Coredja
+   * usa não estão liberadas em "gerenciar permissões".
+   *
+   * Estado próprio porque é o caso que mais enganou até hoje (24/08/2026):
+   * a sonda de leitura passava, a tela dizia "conectado", e no domingo nada
+   * ia para o telão. Responder e AUTORIZAR são coisas diferentes — o teste
+   * antigo só sabia da primeira, e por isso dava um "ok" que não valia nada.
+   */
+  | { estado: 'sem-permissao'; acoesBloqueadas: string[] }
   /** Não chegou: Holyrics fechado, IP/porta errados, ou fora da rede. */
   | { estado: 'inalcancavel'; motivo: string };
 
@@ -664,6 +760,13 @@ export async function testarConexaoHolyrics(): Promise<DiagnosticoHolyrics> {
     if (!infoDaPonte.holyricsOk) {
       return { estado: 'ponte-sem-holyrics', computador: infoDaPonte.computador };
     }
+    // A ponte alcança o Holyrics — falta saber se ele AUTORIZA o que ela
+    // manda. Pontes novas reportam a sondagem no sinal de vida; as antigas
+    // não mandam o campo, e aí não há o que afirmar (`undefined`), só seguir.
+    if (infoDaPonte.acoesBloqueadas && infoDaPonte.acoesBloqueadas.length > 0) {
+      return { estado: 'sem-permissao', acoesBloqueadas: infoDaPonte.acoesBloqueadas };
+    }
+
     return { estado: 'ok-pela-ponte', computador: infoDaPonte.computador };
   }
 
@@ -722,6 +825,15 @@ export async function testarConexaoHolyrics(): Promise<DiagnosticoHolyrics> {
 
   if (dados.status !== 'ok') {
     return { estado: 'recusado', motivo: dados.error ?? 'O Holyrics recusou a consulta.' };
+  }
+
+  // Token aceito e leitura funcionando. Isso ainda NÃO quer dizer que os
+  // comandos vão para o telão: cada ação de escrita tem permissão própria,
+  // e são elas que fazem o trabalho de domingo. Sondar aqui é o que separa
+  // "o Holyrics respondeu" de "o Coredja consegue mandar alguma coisa".
+  const bloqueadas = await acoesBloqueadas(config);
+  if (bloqueadas.length > 0) {
+    return { estado: 'sem-permissao', acoesBloqueadas: bloqueadas };
   }
 
   return { estado: 'ok', painelNoAr: dados.data?.countdown_show === true };
