@@ -206,6 +206,18 @@ export function TelaAvisos() {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [mostrarPassados, setMostrarPassados] = useState(false);
 
+  /**
+   * Qual ação de telão está em andamento agora, ou `null`.
+   *
+   * O caminho da ARTE passa pela fila do Firestore + a ponte no PC do
+   * audiovisual — mais etapas de rede que o texto, que muitas vezes vai
+   * direto. Sem feedback nenhum, o clique parece "travar": a pessoa clica,
+   * nada muda na tela por alguns segundos, e clica de novo sem saber se o
+   * primeiro clique pegou. `disabled` durante o processamento evita clique
+   * duplo, e o texto do botão diz que está em andamento.
+   */
+  const [processando, setProcessando] = useState<'retorno' | 'arte' | null>(null);
+
   // O que está sendo digitado no formulário, espelhado aqui para a prévia
   // conseguir mostrá-lo ao vivo. Mora no pai porque prévia e formulário são
   // irmãos em colunas diferentes.
@@ -256,10 +268,12 @@ export function TelaAvisos() {
   const mexerNoTelao = useCallback(
     async (id: string, publicando: boolean) => {
       setRecado(null);
+      setProcessando('retorno');
       const dados = (await chamar(
         `/api/avisos/${id}/telao`,
         publicando ? 'POST' : 'DELETE',
       )) as RetornoTelao | null;
+      setProcessando(null);
       if (!dados) return;
 
       const holyrics = dados.holyrics;
@@ -291,7 +305,9 @@ export function TelaAvisos() {
   const projetarArte = useCallback(
     async (id: string) => {
       setRecado(null);
+      setProcessando('arte');
       const dados = (await chamar(`/api/avisos/${id}/arte`, 'POST')) as RetornoTelao | null;
+      setProcessando(null);
       if (!dados) return;
 
       const holyrics = dados.holyrics;
@@ -341,7 +357,9 @@ export function TelaAvisos() {
    */
   const fecharArte = useCallback(async () => {
     setRecado(null);
+    setProcessando('arte');
     const dados = (await chamar('/api/telao/arte', 'POST')) as RetornoTelao | null;
+    setProcessando(null);
     if (!dados) return;
 
     const holyrics = dados.holyrics;
@@ -514,6 +532,7 @@ export function TelaAvisos() {
                   via `flex-wrap` do container. */}
               <BotaoPrincipal
                 onClick={() => mexerNoTelao(selecionado.id, !selecionado.noAr)}
+                disabled={processando !== null}
                 className="min-w-[220px] flex-1 text-sm sm:h-14"
                 style={
                   selecionado.noAr
@@ -525,11 +544,13 @@ export function TelaAvisos() {
                     : undefined
                 }
               >
-                {selecionado.noAr
-                  ? 'Tirar da tela de retorno'
-                  : holyricsLigado
-                    ? 'Projetar tela de retorno'
-                    : 'Publicar no telão'}
+                {processando === 'retorno'
+                  ? 'Só um instante…'
+                  : selecionado.noAr
+                    ? 'Tirar da tela de retorno'
+                    : holyricsLigado
+                      ? 'Projetar tela de retorno'
+                      : 'Publicar no telão'}
               </BotaoPrincipal>
 
               {/* Só existe se o aviso TEM arte — sem imagem não há o que
@@ -538,7 +559,12 @@ export function TelaAvisos() {
                   com o id do aviso selecionado): a arte é estado do
                   Holyrics, não deste aviso — outra pessoa pode ter posto
                   outra coisa no telão depois, e "Tirar" não pode prometer
-                  tirar o que já não é mais o que está lá. */}
+                  tirar o que já não é mais o que está lá.
+                  `disabled` durante `processando` evita clique duplo: o
+                  caminho da arte passa pela fila + a ponte no PC do
+                  audiovisual, mais etapas de rede que o texto, então sem
+                  isto um segundo clique impaciente disparava dois comandos
+                  antes do primeiro terminar. */}
               {holyricsLigado && selecionado.imagem && (
                 <BotaoPrincipal
                   onClick={() =>
@@ -546,6 +572,7 @@ export function TelaAvisos() {
                       ? fecharArte()
                       : projetarArte(selecionado.id)
                   }
+                  disabled={processando !== null}
                   className="min-w-[220px] flex-1 text-sm sm:h-14"
                   style={
                     telao.arteNoArId === selecionado.id
@@ -557,9 +584,11 @@ export function TelaAvisos() {
                       : undefined
                   }
                 >
-                  {telao.arteNoArId === selecionado.id
-                    ? 'Tirar a arte do telão'
-                    : 'Projetar a arte agora'}
+                  {processando === 'arte'
+                    ? 'Só um instante…'
+                    : telao.arteNoArId === selecionado.id
+                      ? 'Tirar a arte do telão'
+                      : 'Projetar a arte agora'}
                 </BotaoPrincipal>
               )}
 
