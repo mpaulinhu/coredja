@@ -144,6 +144,25 @@ async function urlQueResponde(url: string, token: string): Promise<string> {
   return url;
 }
 
+/**
+ * Se endereço e token estão preenchidos — SEM sondar a rede.
+ *
+ * Existe porque `configHolyrics()` faz duas sondas de rede de até 3s cada
+ * (`urlQueResponde`) para escolher entre o endereço configurado e o fallback
+ * `localhost` — útil para quem vai de fato CHAMAR o Holyrics, inútil (e
+ * caro) para quem só quer saber "tem token cadastrado?". Publicado na
+ * Vercel, as duas sondas SEMPRE falham por timeout (a nuvem nunca alcança
+ * `192.168.x.x`, e `localhost` lá é o próprio servidor) — sem esta função,
+ * `projetarArteDoAviso` pagava até 6s de espera garantida antes mesmo de
+ * checar se havia ponte viva, e é a ponte quem de fato faz a chamada.
+ */
+async function temEnderecoEToken(): Promise<boolean> {
+  const gravado = await lerConfiguracoesGravadas();
+  const url = resolver(gravado.holyricsUrl, process.env.HOLYRICS_URL).valor;
+  const token = resolver(gravado.holyricsToken, process.env.HOLYRICS_TOKEN).valor;
+  return Boolean(url && token);
+}
+
 /** Se a integração está ligada — usado pela tela para explicar o que acontece. */
 export async function holyricsConfigurado(): Promise<boolean> {
   return (await configHolyrics()) !== null;
@@ -193,8 +212,7 @@ export async function enviarAvisoAoHolyrics(
   /** Exibir a arte no telão na hora, além de deixá-la pronta na pasta. */
   projetarImagem = false,
 ): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
   if (!podeEnviarAoHolyrics(aviso)) {
     return { estado: 'nao-suportado', motivo: MOTIVO_IMAGEM_NAO_SUPORTADA };
@@ -209,8 +227,17 @@ export async function enviarAvisoAoHolyrics(
   // `{"status":"error","error":"Item not found"}` — ele EXIBE um anúncio já
   // cadastrado no Holyrics, procurando por id/nome, e não aceita texto novo
   // vindo de fora. O painel de comunicação aceita, que é o que precisamos.
+  //
+  // `configHolyrics()` (com as sondas de rede) só é chamado DENTRO da
+  // closure, que só roda se `entregar()` decidir pelo caminho direto —
+  // publicado, com imagem, isso nunca acontece (ver `preferirFila` abaixo),
+  // então o custo das sondas nem existe nesse caso.
   const { resultado, pelaFila } = await entregar(
-    () => chamar(config, 'SetTextCommunicationPanel', { text: texto, show: true }),
+    async () => {
+      const config = await configHolyrics();
+      if (!config) return { estado: 'nao-configurado' };
+      return chamar(config, 'SetTextCommunicationPanel', { text: texto, show: true });
+    },
     {
       tipo: 'aviso-projetar',
       dados: dadosDoComando.aviso(
@@ -267,8 +294,7 @@ export async function enviarAvisoAoHolyrics(
 export async function projetarArteDoAviso(
   imagem: ImagemDoAviso,
 ): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
   if (!(await ponteEstaViva())) {
     return {
@@ -307,8 +333,7 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
   texto: string;
   imagem?: ImagemDoAviso;
 }): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
   if (!podeEnviarAoHolyrics(aviso)) {
     return { estado: 'nao-suportado', motivo: MOTIVO_IMAGEM_NAO_SUPORTADA };
@@ -322,13 +347,20 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
   // no Holyrics (playlist), não projeta agora — salvar a foto na pasta antes
   // de alguém decidir exibir seria fazer trabalho que pode nunca ser usado.
   // `enviarAvisoAoHolyrics`, que projeta na hora, é quem manda a imagem.
+  //
+  // `configHolyrics()` só roda dentro da closure — mesmo motivo de
+  // `enviarAvisoAoHolyrics`: publicado, com ponte viva, `entregar()` nunca
+  // chega a chamar isto, e as sondas de rede nem acontecem.
   const resultado = await entregarResultado(
-    () =>
-      chamar(config, 'AddToPlaylist', {
+    async () => {
+      const config = await configHolyrics();
+      if (!config) return { estado: 'nao-configurado' };
+      return chamar(config, 'AddToPlaylist', {
         items: [{ type: 'title', name: texto }],
         index: -1, // -1 = no fim da fila
         ignore_duplicates: true,
-      }),
+      });
+    },
     {
       tipo: 'aviso-fila',
       dados: dadosDoComando.aviso(aviso.titulo.trim(), aviso.texto.trim()),
@@ -343,13 +375,13 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
 
 /** Tira o aviso do telão do Holyrics. Mesmo contrato de `enviarAviso`. */
 export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
-  return entregarResultado(
-    () => chamar(config, 'SetTextCommunicationPanel', { text: '', show: false }),
-    { tipo: 'aviso-limpar', dados: {} },
-  );
+  return entregarResultado(async () => {
+    const config = await configHolyrics();
+    if (!config) return { estado: 'nao-configurado' };
+    return chamar(config, 'SetTextCommunicationPanel', { text: '', show: false });
+  }, { tipo: 'aviso-limpar', dados: {} });
 }
 
 /**
@@ -362,13 +394,13 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
  * imagem ficava presa até alguém mexer no Holyrics à mão.
  */
 export async function fecharArteNoHolyrics(): Promise<ResultadoHolyrics> {
-  const config = await configHolyrics();
-  if (!config) return { estado: 'nao-configurado' };
+  if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
-  return entregarResultado(
-    () => chamar(config, 'CloseCurrentPresentation', {}),
-    { tipo: 'arte-fechar', dados: {} },
-  );
+  return entregarResultado(async () => {
+    const config = await configHolyrics();
+    if (!config) return { estado: 'nao-configurado' };
+    return chamar(config, 'CloseCurrentPresentation', {});
+  }, { tipo: 'arte-fechar', dados: {} });
 }
 
 /**
