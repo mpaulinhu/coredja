@@ -150,3 +150,49 @@ export async function registrarSinalDaPonte(
     .doc(DOC_SINAL)
     .set({ ...extras, vistaEm: new Date().toISOString() }, { merge: true });
 }
+
+/** Uma linha do log da ponte, pronta para a tela de Configurações exibir. */
+export interface LinhaDoLogDaPonte {
+  id: string;
+  linha: string;
+  criadoEm: string;
+}
+
+/**
+ * As últimas linhas que a ponte gravou — mesmo conteúdo do `registro.txt`
+ * dela, só que acessível daqui, sem precisar estar no PC do audiovisual.
+ *
+ * Ordena da mais nova para a mais antiga: é assim que um log se lê (o que
+ * aconteceu por último primeiro), e é o oposto da ordem em que a subcoleção
+ * foi escrita — a inversão acontece aqui, não na ponte, porque a ponte só
+ * faz `add()` sequencial e não tem por que saber em qual ordem a tela quer
+ * ler.
+ */
+export async function ultimasLinhasDoLogDaPonte(
+  limite = 100,
+): Promise<LinhaDoLogDaPonte[]> {
+  try {
+    const snap = await getFirestoreDb()
+      .collection(COLECAO_SINAL)
+      .doc(DOC_SINAL)
+      .collection('log')
+      .orderBy('criadoEm', 'desc')
+      .limit(limite)
+      .get();
+
+    return snap.docs.map((doc) => {
+      const dados = doc.data();
+      const criadoEm = dados.criadoEm;
+      return {
+        id: doc.id,
+        linha: typeof dados.linha === 'string' ? dados.linha : '',
+        criadoEm:
+          criadoEm && typeof criadoEm.toDate === 'function'
+            ? criadoEm.toDate().toISOString()
+            : new Date().toISOString(),
+      };
+    });
+  } catch {
+    return [];
+  }
+}

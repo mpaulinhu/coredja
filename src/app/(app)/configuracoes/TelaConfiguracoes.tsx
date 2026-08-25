@@ -9,6 +9,7 @@ import type {
 } from '@/lib/configuracoes-compartilhado';
 import { CartaoFirebase } from './CartaoFirebase';
 import { CartaoHolyrics } from './CartaoHolyrics';
+import { CartaoRegistroDaPonte } from './CartaoRegistroDaPonte';
 import { Checklist } from './Checklist';
 
 /**
@@ -144,6 +145,8 @@ export function TelaConfiguracoes() {
         />
 
         <CartaoFirebase firebase={dados.firebase} />
+
+        <CartaoRegistroDaPonte />
 
         {/* Erro que aparece DEPOIS de a tela já ter carregado — ex: o
             recarregamento pós-salvamento falhou. Fica no fim para não
