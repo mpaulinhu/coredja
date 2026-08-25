@@ -28,5 +28,11 @@
     "tailwindcss": "^4",
     "typescript": "^5"
   },
-  "packageManager": "pnpm@11.5.2"
+  "packageManager": "pnpm@11.5.2",
+  "overrides": {
+    "jose": "^5.10.0"
+  },
+  "resolutions": {
+    "jose": "^5.10.0"
+  }
 }

@@ -90,13 +90,25 @@ export function PainelAudiovisual() {
   const recarregar = useCallback(async () => {
     try {
       const cabecalho = await cabecalhoDeAutorizacao();
-      if (!cabecalho) return;
+      // Sair daqui sem baixar `carregando` deixava a tela em "Carregando…"
+      // para SEMPRE, engolindo a falha: nem dado, nem erro, nem fim. Foi o que
+      // se viu ao publicar na Vercel, com as rotas devolvendo 500 — a tela
+      // não dava pista nenhuma de que algo tinha quebrado.
+      if (!cabecalho) {
+        setCarregando(false);
+        setConectado(false);
+        return;
+      }
 
       const resposta = await fetch('/api/painel/mensagens', {
         headers: cabecalho,
         cache: 'no-store',
       });
-      if (!resposta.ok) return;
+      if (!resposta.ok) {
+        setCarregando(false);
+        setConectado(false);
+        return;
+      }
 
       const dados = (await resposta.json()) as {
         conversas: Conversa[];
@@ -138,6 +150,9 @@ export function PainelAudiovisual() {
           : null;
       });
     } catch {
+      // Mesmo motivo dos dois `return` acima: rede caiu, JSON inválido, o que
+      // for — a tela precisa PARAR de carregar e mostrar o estado real.
+      setCarregando(false);
       setConectado(false);
     }
   }, [tocar]);
