@@ -464,6 +464,20 @@ function ResultadoTeste({ resultado }: { resultado: ResultadoDoTeste }) {
           .
         </p>
       )}
+      {resultado.estado === 'inalcancavel' && (
+        <div className="mt-2 rounded-lg bg-fundo px-3 py-2 text-[13px] leading-relaxed text-texto-suave">
+          <p>
+            <strong>Se o Holyrics está aberto e mesmo assim não atende</strong>, abra{' '}
+            <code className="font-mono">logspi_server.txt</code> na pasta de
+            instalação dele. A linha{' '}
+            <code className="font-mono">port ... is already in use</code> quer
+            dizer que outro programa tomou a porta e o API Server{' '}
+            <strong>nunca chegou a subir</strong> — a aba API Server continua
+            mostrando &quot;Ativado&quot;, então isso não aparece em lugar nenhum
+            da tela do Holyrics.
+          </p>
+        </div>
+      )}
       {resultado.estado === 'sem-permissao' && (
         <div className="mt-1 space-y-2 text-[13px] leading-relaxed text-texto-suave">
           <p>

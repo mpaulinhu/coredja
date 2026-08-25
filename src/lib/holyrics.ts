@@ -599,43 +599,67 @@ export function holyricsParaTela(
  * TESTE DE CONEXÃO — usado pela tela de Configurações
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** O que o teste descobriu. Cada caso pede uma ação diferente de quem lê. */
 /**
- * As ações de ESCRITA que o Coredja precisa ter liberadas no Holyrics.
+ * As ações de ESCRITA que dá para sondar SEM executá-las.
  *
- * Cada uma precisa ser marcada à mão em Configurações → API Server →
- * gerenciar permissões, uma por uma. Liberar uma não libera as outras, e o
- * Holyrics não oferece nenhum "liberar tudo".
+ * ┌─ POR QUE SÓ ESTAS TRÊS ─────────────────────────────────────────────────┐
+ * Medido contra um Holyrics real (25/08/2026). Mandando corpo vazio `{}`:
  *
- * `rotulo` é o que aparece na tela: quem está na cabine às 9h de domingo
- * precisa saber o que parou de funcionar, não o nome interno da ação.
+ *   ShowImage                        → `Field 'file' not found`
+ *   StartCountdownCommunicationPanel → `Fields 'minutes,seconds' ... not found`
+ *   AddToPlaylist                    → `Field 'items' is empty`
+ *
+ *   SetTextCommunicationPanel        → {"status":"ok"}  ← ACEITOU
+ *   CloseCurrentPresentation         → {"status":"ok"}  ← ACEITOU
+ *   StopCountdownCommunicationPanel  → {"status":"ok"}  ← ACEITOU
+ *   SetCommunicationPanelSettings    → {"status":"ok"}  ← ACEITOU
+ *
+ * As quatro de baixo aceitam corpo vazio em vez de recusar, então não há
+ * erro de campo que sirva de prova — e o `ok` delas não distingue "liberada"
+ * de "executada". Medido o efeito real de cada uma com `{}`:
+ *
+ *   StopCountdownCommunicationPanel  → PARA um cronômetro em andamento
+ *                                      (medido: 298s → 0). Destrutiva.
+ *   SetTextCommunicationPanel        → campo ausente = "não mexer"; o texto
+ *   SetCommunicationPanelSettings      no ar sobrevive. Inócua na prática.
+ *   CloseCurrentPresentation         → fecha a apresentação no ar.
+ *
+ * Uma única destrutiva já basta para excluir o grupo: o teste é apertado no
+ * meio do culto, e parar o cronômetro da pregação para diagnosticar seria
+ * pior que o problema diagnosticado. Cobrir menos é a escolha certa.
+ *
+ * A primeira versão desta sondagem incluía as sete e foi validada contra um
+ * servidor de mentira escrito com a suposição já embutida (401 vs erro de
+ * campo). O Holyrics real desmentiu quatro delas. Um mock só confirma o que
+ * quem o escreveu já achava — daí a lista acima ser medição, não dedução.
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *
+ * A cobertura parcial ainda vale: as permissões são marcadas uma a uma, e na
+ * prática quem esquece de liberar, esquece várias. Achar UMA bloqueada já
+ * prova que a instalação está incompleta e manda a pessoa para a tela certa.
  */
-const ACOES_DE_ESCRITA: { acao: string; rotulo: string }[] = [
-  { acao: 'SetTextCommunicationPanel', rotulo: 'Mandar aviso para a tela de retorno' },
+const ACOES_SONDAVEIS: { acao: string; rotulo: string }[] = [
   { acao: 'ShowImage', rotulo: 'Projetar a arte do aviso' },
-  { acao: 'CloseCurrentPresentation', rotulo: 'Tirar a arte do telão' },
   { acao: 'StartCountdownCommunicationPanel', rotulo: 'Ligar o cronômetro' },
-  { acao: 'StopCountdownCommunicationPanel', rotulo: 'Parar o cronômetro' },
-  { acao: 'SetCommunicationPanelSettings', rotulo: 'Limpar o rótulo do cronômetro' },
   { acao: 'AddToPlaylist', rotulo: 'Pôr o aviso na fila do Holyrics' },
 ];
 
 /**
- * Descobre se uma ação de escrita está liberada SEM executá-la.
+ * Descobre se uma ação está liberada SEM executá-la.
  *
- * O truque: o Holyrics confere a permissão ANTES de validar os campos do
- * corpo. Mandando um corpo vazio `{}`:
+ * Só funciona para as ações de `ACOES_SONDAVEIS`, que exigem um campo
+ * obrigatório: o Holyrics confere a permissão ANTES de validar os campos,
+ * então o erro de campo prova que a permissão existe e nada acontece.
  *
- * - ação NÃO liberada  → HTTP 401 `unauthorized action`
- * - ação liberada      → HTTP 200 com `status: "error"` reclamando de campo
- *                        faltando (ex.: `Field 'text' not found`)
+ * Assinaturas medidas contra o Holyrics real:
  *
- * Ou seja, o erro de campo é a PROVA de que a permissão existe — e nada
- * acontece no telão, que é o requisito para isto poder rodar durante o culto.
- *
- * O comportamento veio de uma observação real: ao descobrir que `ShowImage`
- * pedia `file` e não `path`, a resposta foi `Field 'file' not found` com a
- * ação já liberada; antes de liberá-la, a mesma chamada dava 401.
+ *   401 `unauthorized action`      → não liberada (ou ação inexistente)
+ *   401 `invalid token`            → token errado — problema OUTRO, não é
+ *                                    permissão, e vira `null` para não ser
+ *                                    reportado como "libere esta ação"
+ *   200 `Field '...' not found`    → liberada, e NÃO executou
+ *   200 `{"status":"ok"}`          → executou: impossível aqui, porque toda
+ *                                    ação desta lista exige campo
  */
 async function permissaoLiberada(
   config: ConfigHolyrics,
@@ -653,17 +677,19 @@ async function permissaoLiberada(
       },
     );
 
-    if (resposta.status === 401) return false;
-    if (!resposta.ok) return null;
-
     const dados = (await resposta.json().catch(() => null)) as {
       status?: string;
       error?: string;
     } | null;
 
-    // 200 + `unauthorized action` no corpo: algumas versões respondem assim
-    // em vez de 401. Os dois querem dizer a mesma coisa.
+    // Token inválido não é problema de permissão de ação: o teste principal
+    // já reporta isso como `recusado`, com o texto certo. Dizer "libere
+    // ShowImage" para quem errou o token manda a pessoa para o lugar errado.
+    if (dados?.error && /invalid token/i.test(dados.error)) return null;
+
+    if (resposta.status === 401) return false;
     if (dados?.error && /unauthorized/i.test(dados.error)) return false;
+    if (!resposta.ok) return null;
 
     return true;
   } catch {
@@ -672,10 +698,10 @@ async function permissaoLiberada(
   }
 }
 
-/** Sonda todas as ações de escrita e devolve o rótulo das que faltam. */
+/** Sonda as ações seguras e devolve o rótulo das que estão bloqueadas. */
 async function acoesBloqueadas(config: ConfigHolyrics): Promise<string[]> {
   const veredictos = await Promise.all(
-    ACOES_DE_ESCRITA.map(async ({ acao, rotulo }) => ({
+    ACOES_SONDAVEIS.map(async ({ acao, rotulo }) => ({
       rotulo,
       liberada: await permissaoLiberada(config, acao),
     })),
@@ -686,6 +712,25 @@ async function acoesBloqueadas(config: ConfigHolyrics): Promise<string[]> {
   return veredictos.filter((v) => v.liberada === false).map((v) => v.rotulo);
 }
 
+/**
+ * Onde olhar quando o Holyrics não atende — e o motivo de este texto existir.
+ *
+ * O API Server tem um log próprio em `logs/api_server.txt`, dentro da pasta de
+ * instalação do Holyrics, e ele registra a causa exata da falha de subida. O
+ * caso mais traiçoeiro é `port 8091 is already in use`: o Holyrics fica
+ * tentando subir a cada 15s, falhando sempre, e nada na tela dele denuncia
+ * isso — a aba API Server continua mostrando "Ativado" com a porta certa.
+ *
+ * Aconteceu nesta própria investigação (25/08/2026): outro processo segurava
+ * a 8091, o Holyrics real nunca subiu, e por um bom tempo o diagnóstico foi
+ * feito contra o processo errado. O log foi o que desfez o engano em segundos.
+ */
+const DICA_LOG_DO_HOLYRICS =
+  'Confira o IP e a porta, e se o Holyrics está aberto. Se estiver e mesmo assim não atender, ' +
+  'abra `logs/api_server.txt` na pasta do Holyrics: se aparecer "port ... is already in use", ' +
+  'outro programa tomou a porta e o API Server nunca chegou a subir — a tela do Holyrics não mostra isso.';
+
+/** O que o teste descobriu. Cada caso pede uma ação diferente de quem lê. */
 export type DiagnosticoHolyrics =
   | { estado: 'nao-configurado' }
   /** Falou, respondeu, token aceito. */
@@ -786,7 +831,7 @@ export async function testarConexaoHolyrics(): Promise<DiagnosticoHolyrics> {
       motivo:
         erro instanceof DOMException && erro.name === 'TimeoutError'
           ? `O Holyrics não respondeu em ${TEMPO_LIMITE_MS / 1000} segundos. Ele está aberto, com o API Server ligado, e o servidor do Coredja está na mesma rede?`
-          : `Não foi possível alcançar ${config.url}. Confira o IP e a porta, e se o Holyrics está aberto.`,
+          : `Não foi possível alcançar ${config.url}. ${DICA_LOG_DO_HOLYRICS}`,
     };
   }
 
