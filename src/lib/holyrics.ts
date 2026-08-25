@@ -396,11 +396,23 @@ export async function limparAvisoNoHolyrics(): Promise<ResultadoHolyrics> {
 export async function fecharArteNoHolyrics(): Promise<ResultadoHolyrics> {
   if (!(await temEnderecoEToken())) return { estado: 'nao-configurado' };
 
-  return entregarResultado(async () => {
-    const config = await configHolyrics();
-    if (!config) return { estado: 'nao-configurado' };
-    return chamar(config, 'CloseCurrentPresentation', {});
-  }, { tipo: 'arte-fechar', dados: {} });
+  // `preferirFila: true` — mesma exceção de `projetarArteDoAviso`. Fechar a
+  // arte é uma ação do MESMO tipo que projetá-la: só a ponte, rodando na
+  // rede da igreja, alcança o Holyrics de fato. Sem isto, `entregar()`
+  // tentava o caminho direto primeiro (que publicado SEMPRE falha por
+  // timeout de rede) antes de cair na fila — o mesmo atraso de vários
+  // segundos que já tinha sido corrigido para "projetar", mas não para
+  // "tirar".
+  const { resultado } = await entregar(
+    async () => {
+      const config = await configHolyrics();
+      if (!config) return { estado: 'nao-configurado' };
+      return chamar(config, 'CloseCurrentPresentation', {});
+    },
+    { tipo: 'arte-fechar', dados: {} },
+    true,
+  );
+  return resultado;
 }
 
 /**
