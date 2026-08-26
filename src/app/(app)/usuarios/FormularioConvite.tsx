@@ -6,6 +6,7 @@ import type { Departamento } from '@/lib/types';
 import type { AreaResumo } from './TelaUsuarios';
 import { TODOS_OS_PAPEIS } from './TelaUsuarios';
 import { SeletorPapeis } from './SeletorPapeis';
+import { SeletorAbas } from './SeletorAbas';
 import { SeletorAreas } from './SeletorAreas';
 import { SeletorDepartamento } from './SeletorDepartamento';
 
@@ -18,6 +19,7 @@ interface Props {
     papel: Papel,
     departamento: string | null,
     areasVisiveis: string[],
+    abas: string[] | null,
   ) => Promise<{ ok: true } | { ok: false; erro: string }>;
 }
 
@@ -27,6 +29,8 @@ export function FormularioConvite({ areas, departamentos, onConvidar }: Props) {
   const [papel, setPapel] = useState<Papel | null>(null);
   const [departamento, setDepartamento] = useState<string | null>(null);
   const [areasVisiveis, setAreasVisiveis] = useState<string[]>([]);
+  // `null` = segue o padrão do cargo escolhido. Ver `abas` em `Pessoa`.
+  const [abas, setAbas] = useState<string[] | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -47,6 +51,7 @@ export function FormularioConvite({ areas, departamentos, onConvidar }: Props) {
       papel,
       departamento,
       areasVisiveis.filter((slug) => slug !== departamento),
+      abas,
     );
     setEnviando(false);
 
@@ -56,6 +61,7 @@ export function FormularioConvite({ areas, departamentos, onConvidar }: Props) {
       setPapel(null);
       setDepartamento(null);
       setAreasVisiveis([]);
+      setAbas(null);
     } else {
       setErro(resultado.erro);
     }
@@ -116,6 +122,18 @@ export function FormularioConvite({ areas, departamentos, onConvidar }: Props) {
             selecionadas={areasVisiveis}
             onMudar={setAreasVisiveis}
           />
+        </div>
+      )}
+
+      {/* Só depois de escolher o papel: as abas disponíveis dependem dele, e
+          uma lista vazia antes disso não diria nada a quem está preenchendo. */}
+      {papel && (
+        <div>
+          <p className="mb-1.5 text-sm text-texto-suave">
+            Telas no menu{' '}
+            <span className="text-texto-fraco">· o que aparece pra ela</span>
+          </p>
+          <SeletorAbas papel={papel} selecionadas={abas} onMudar={setAbas} />
         </div>
       )}
 

@@ -84,6 +84,7 @@ export function TelaUsuarios() {
       papel: Papel,
       departamento: string | null,
       areasVisiveis: string[],
+      abas: string[] | null,
     ) => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return { ok: false as const, erro: 'Sessão expirada.' };
@@ -91,7 +92,16 @@ export function TelaUsuarios() {
       const resp = await fetch('/api/pessoas', {
         method: 'POST',
         headers: { ...cabecalho, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, email, papel, departamento, areasVisiveis }),
+        // `abas: null` (padrão do cargo) não vai no corpo — o servidor trata
+        // ausente como padrão, e mandar `null` gravaria o campo à toa.
+        body: JSON.stringify({
+          nome,
+          email,
+          papel,
+          departamento,
+          areasVisiveis,
+          ...(abas ? { abas } : {}),
+        }),
       });
       const dados = await resp.json();
       if (!resp.ok) return { ok: false as const, erro: dados.erro ?? 'Falha ao convidar.' };
