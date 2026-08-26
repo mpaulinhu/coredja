@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { RegistrarServiceWorker } from '@/components/RegistrarServiceWorker';
 
 export const metadata: Metadata = {
   title: 'Coredja',
@@ -81,7 +82,12 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {/* Registra o service worker na carga da página — é o que faz o
+            Chrome oferecer "Instalar app". Ver o componente. */}
+        <RegistrarServiceWorker />
+        {children}
+      </body>
     </html>
   );
 }
