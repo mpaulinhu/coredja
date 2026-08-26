@@ -40,6 +40,10 @@ export async function GET(request: Request) {
     // confere de novo em cada rota, então isto é só para não oferecer o que
     // seria recusado.
     podeApagar: podeFazer(pessoa.papel, 'departamentos:escrever'),
+    // Se esta pessoa opera o telão. Decide se o atalho "Enviar ao telão"
+    // aparece no campo de escrita: para quem manda recado de um departamento
+    // (Cantina, Kids) ele é um caminho para uma tela que não é dela.
+    podePublicarNoTelao: podeFazer(pessoa.papel, 'avisos:publicar'),
   });
 }
 

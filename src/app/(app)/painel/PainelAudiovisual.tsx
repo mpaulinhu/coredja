@@ -74,6 +74,8 @@ export function PainelAudiovisual() {
    * recusado — cada rota de apagar confere de novo por conta própria.
    */
   const [podeApagar, setPodeApagar] = useState(false);
+  /** Se esta pessoa opera o telão — decide o atalho "Enviar ao telão". */
+  const [podePublicarNoTelao, setPodePublicarNoTelao] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [som, setSom] = useState(true);
@@ -122,8 +124,10 @@ export function PainelAudiovisual() {
         conversas: Conversa[];
         meuDepartamento: string | null;
         podeApagar?: boolean;
+        podePublicarNoTelao?: boolean;
       };
       setPodeApagar(dados.podeApagar === true);
+      setPodePublicarNoTelao(dados.podePublicarNoTelao === true);
       const todas = dados.conversas.flatMap((c) => c.mensagens);
 
       // Toca apenas para recados vindos de outro departamento: a própria
@@ -403,6 +407,7 @@ export function PainelAudiovisual() {
                     )
                 : null
             }
+            podePublicarNoTelao={podePublicarNoTelao}
             aoEnviar={recarregar}
             aoVoltar={() => setVerConversaNoCelular(false)}
           />
@@ -685,6 +690,7 @@ function PainelDaConversa({
   aoResolverTodos,
   aoApagarMensagem,
   aoLimparConversa,
+  podePublicarNoTelao,
   aoEnviar,
   aoVoltar,
 }: {
@@ -700,6 +706,8 @@ function PainelDaConversa({
   aoApagarMensagem: ((id: string) => Promise<void>) | null;
   /** Apaga a conversa inteira. `null` quando quem está olhando não pode. */
   aoLimparConversa: (() => Promise<void>) | null;
+  /** Só quem opera o telão vê o atalho para a tela de Avisos. */
+  podePublicarNoTelao: boolean;
   aoEnviar: () => Promise<void>;
   aoVoltar: () => void;
 }) {
@@ -902,6 +910,7 @@ function PainelDaConversa({
         conversaId={conversaId}
         nomeDoLado={lado.nome}
         temUrgencia={conversa.temUrgencia}
+        podePublicarNoTelao={podePublicarNoTelao}
         aoEnviar={aoEnviar}
       />
     </>
@@ -1074,12 +1083,15 @@ function CampoDeResposta({
   conversaId,
   nomeDoLado,
   temUrgencia,
+  podePublicarNoTelao,
   aoEnviar,
 }: {
   conversaId: string;
   nomeDoLado: string;
   /** Sem Audiovisual na conversa não há "urgente" — ver `conversaTemUrgencia`. */
   temUrgencia: boolean;
+  /** Só quem opera o telão vê o atalho para a tela de Avisos. */
+  podePublicarNoTelao: boolean;
   aoEnviar: () => Promise<void>;
 }) {
   const [texto, setTexto] = useState('');
@@ -1311,13 +1323,19 @@ function CampoDeResposta({
               {/* Publicar no telão é fluxo próprio (aviso cadastrado +
                   permissão `avisos:publicar`), então daqui vai um link para a
                   tela que faz isso, em vez de um segundo caminho de envio ao
-                  Holyrics para manter em dia. */}
-              <Link
-                href="/avisos"
-                className="flex h-9 shrink-0 items-center rounded-lg border border-borda px-3 text-xs font-semibold text-texto-suave transition-colors hover:text-texto"
-              >
-                Enviar ao telão
-              </Link>
+                  Holyrics para manter em dia.
+                  Só para quem publica: para quem manda recado de um
+                  departamento (Cantina, Kids) este atalho levava a uma tela
+                  que não é dela, ao lado do botão de anexar imagem — como se
+                  fosse mais uma forma de mandar o recado. */}
+              {podePublicarNoTelao && (
+                <Link
+                  href="/avisos"
+                  className="flex h-9 shrink-0 items-center rounded-lg border border-borda px-3 text-xs font-semibold text-texto-suave transition-colors hover:text-texto"
+                >
+                  Enviar ao telão
+                </Link>
+              )}
             </div>
           </div>
 
