@@ -183,7 +183,7 @@ export async function holyricsConfigurado(): Promise<boolean> {
  * envio funcionou.
  */
 export const MOTIVO_IMAGEM_NAO_SUPORTADA =
-  'A API do Holyrics não recebe imagens enviadas de fora — ela só exibe artes que já estão na aba de arquivos do próprio Holyrics. Projete esta arte manualmente.';
+  'Este aviso não tem título nem texto — a tela de retorno mostra texto, então não há o que projetar nela. Use "Projetar a arte agora" para pôr a imagem no telão, ou edite o aviso e escreva um título.';
 
 /**
  * Aviso que tem texto E imagem: o texto vai, a arte não (mesma limitação

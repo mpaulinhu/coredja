@@ -539,9 +539,24 @@ export function TelaAvisos() {
                   os dois espremerem a ponto de quebrar o texto no meio de
                   uma palavra, mas ainda colapsa para duas linhas no celular
                   via `flex-wrap` do container. */}
+              {/* Um aviso só de imagem não tem o que pôr na tela de retorno,
+                  que mostra TEXTO — clicar aqui só produzia uma recusa do
+                  servidor com uma mensagem que falava de imagem, quando o
+                  que faltava era título. Desabilitar diz a mesma coisa antes
+                  do clique, e o `title` explica o porquê ao passar o mouse.
+                  Continua visível (não escondido) para a tela não mudar de
+                  forma conforme o aviso selecionado. */}
               <BotaoPrincipal
                 onClick={() => mexerNoTelao(selecionado.id, !selecionado.noAr)}
-                disabled={processando !== null}
+                disabled={
+                  processando !== null ||
+                  (ehSoImagem(selecionado) && !selecionado.noAr)
+                }
+                title={
+                  ehSoImagem(selecionado) && !selecionado.noAr
+                    ? 'Este aviso é só imagem. A tela de retorno mostra texto — escreva um título no aviso, ou use "Projetar a arte agora".'
+                    : undefined
+                }
                 className="min-w-[220px] flex-1 text-sm sm:h-14"
                 style={
                   selecionado.noAr
