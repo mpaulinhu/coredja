@@ -92,30 +92,51 @@ export interface ConfiguracoesParaTela {
  * certo, e mesmo assim vem 401. Conferir contra uma lista é mais rápido do
  * que descobrir uma a uma quando o recurso falha ao vivo.
  */
-export const ACOES_DO_HOLYRICS: { acao: string; paraQue: string }[] = [
+export const ACOES_DO_HOLYRICS: {
+  acao: string;
+  paraQue: string;
+  /** O que para de funcionar sem ela — o que a pessoa vê, não o nome interno. */
+  seFaltar: string;
+}[] = [
   {
     acao: 'GetCommunicationPanelInfo',
     paraQue: 'Ler quanto falta no cronômetro — é o que o "Testar conexão" usa.',
+    seFaltar: 'O teste de conexão nunca confirma, mesmo com tudo certo.',
   },
   {
     acao: 'SetTextCommunicationPanel',
     paraQue: 'Projetar o texto do aviso na tela de retorno.',
+    seFaltar: 'Nenhum aviso aparece no retorno.',
+  },
+  {
+    acao: 'ShowImage',
+    paraQue: 'Exibir a arte do aviso no telão.',
+    seFaltar: '"Projetar a arte agora" não põe nada na tela.',
+  },
+  {
+    acao: 'CloseCurrentPresentation',
+    paraQue: 'Tirar a arte do telão.',
+    seFaltar: 'A arte fica presa no telão — só sai pelo próprio Holyrics.',
   },
   {
     acao: 'StartCountdownCommunicationPanel',
     paraQue: 'Ligar o cronômetro do bloco da ordem do culto.',
+    seFaltar: 'O bloco começa e o cronômetro do retorno não anda.',
   },
   {
     acao: 'StopCountdownCommunicationPanel',
     paraQue: 'Desligar o cronômetro ao encerrar o bloco.',
+    seFaltar: 'O cronômetro continua correndo depois do bloco acabar.',
   },
   {
     acao: 'SetCommunicationPanelSettings',
     paraQue: 'Limpar o rótulo que sobra acima do cronômetro.',
+    seFaltar: 'Sobra no retorno o texto do bloco anterior.',
   },
   {
     acao: 'AddToPlaylist',
     paraQue: 'Mandar o aviso para a fila, sem projetar na hora.',
+    seFaltar: '"Avisar audiovisual" não chega na playlist do Holyrics.',
   },
 ];
 

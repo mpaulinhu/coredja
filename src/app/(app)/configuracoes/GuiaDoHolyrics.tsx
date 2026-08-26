@@ -37,7 +37,7 @@ export function GuiaDoHolyrics() {
         </Passo>
       </ol>
 
-      <ul className="mt-4 flex flex-col gap-2 border-t border-borda pt-4">
+      <ul className="mt-4 flex flex-col gap-3 border-t border-borda pt-4">
         {ACOES_DO_HOLYRICS.map((item) => (
           <li key={item.acao}>
             <code className="font-mono text-[12px] font-semibold text-texto">
@@ -46,43 +46,85 @@ export function GuiaDoHolyrics() {
             <p className="text-[12px] leading-snug text-texto-fraco">
               {item.paraQue}
             </p>
+            {/* O que quebra sem ela, e não só para que ela serve: o sintoma é
+                o que a pessoa tem em mãos quando volta aqui procurando o que
+                faltou marcar. Foi assim que um `401` em
+                `CloseCurrentPresentation` custou uma noite de diagnóstico —
+                a lista da tela nem citava essa ação. */}
+            <p className="mt-0.5 text-[12px] leading-snug" style={{ color: 'var(--alerta)' }}>
+              Sem ela: {item.seFaltar}
+            </p>
           </li>
         ))}
       </ul>
 
-      {/* Esta é a limitação que mais custa tempo de quem instala: tudo
-          configurado, tudo testado, e não funciona porque o servidor está
-          fora da rede da igreja. Aparece aqui em vez de só no código. */}
+      {/* O erro que o `401` produz é indistinguível de "token errado" para
+          quem lê só a mensagem do Holyrics — que fala em token justamente
+          quando o problema é permissão. Dizer isso aqui evita a pessoa ir
+          trocar um token que estava certo. */}
+      <p className="mt-3 text-[12px] leading-relaxed text-texto-fraco">
+        <strong className="font-semibold text-texto-suave">
+          Marcou todas e ainda dá erro 401?
+        </strong>{' '}
+        401 quase sempre é ação não liberada, não token errado — o Holyrics
+        responde citando o token mesmo quando o token está certo. Confira se
+        cada linha acima está marcada na coluna Local, uma por uma: ele não
+        tem &ldquo;liberar tudo&rdquo;.
+      </p>
+
+      {/* Este bloco dizia "hospedado, o teste sempre vai dar tempo esgotado"
+          e "imagem precisa ser projetada à mão" — as duas coisas deixaram de
+          valer quando o Conector passou a existir, e mandavam quem instala
+          procurar problema de rede onde não havia. Corrigido em 26/08/2026. */}
       <div
         className="mt-4 rounded-lg border px-3 py-2.5"
         style={{
-          borderColor: 'var(--alerta)',
-          background: 'var(--alerta-fundo)',
+          borderColor: 'var(--borda-forte)',
+          background: 'var(--fundo-elevado)',
         }}
       >
-        <p className="text-[12px] font-bold" style={{ color: 'var(--alerta)' }}>
-          O Coredja precisa estar na mesma rede do Holyrics
+        <p className="text-[12px] font-bold text-texto">
+          Quem alcança o Holyrics é a rede da igreja
         </p>
         <p className="mt-1 text-[12px] leading-relaxed text-texto-suave">
-          Quem fala com o Holyrics é o servidor do Coredja, não o navegador —
-          é assim que o token nunca chega ao seu computador. O efeito colateral:
-          hospedado na internet, o servidor não alcança um endereço{' '}
-          <code className="font-mono">192.168.x.x</code> da igreja, e o teste
-          sempre vai dar tempo esgotado. Rodando na máquina do audiovisual, ou
-          em outra da mesma rede, funciona.
+          Quem fala com o Holyrics é o servidor do Coredja, nunca o navegador —
+          é assim que o token não chega ao seu computador. Um endereço{' '}
+          <code className="font-mono">192.168.x.x</code> só existe dentro da
+          rede da igreja, então:
         </p>
+        <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-4 text-[12px] leading-relaxed text-texto-suave">
+          <li>
+            <strong className="font-semibold text-texto-suave">
+              Coredja no PC do audiovisual:
+            </strong>{' '}
+            fala direto com o Holyrics. Não precisa de Conector para texto e
+            cronômetro — só para a arte.
+          </li>
+          <li>
+            <strong className="font-semibold text-texto-suave">
+              Coredja publicado na internet:
+            </strong>{' '}
+            o servidor não alcança a rede da igreja, e{' '}
+            <strong className="font-semibold text-texto-suave">
+              tudo passa pelo Conector
+            </strong>
+            . Sem ele rodando, nada chega ao telão — nem texto. O teste dirá
+            &ldquo;Conectado pela ponte&rdquo;, que é o resultado certo aqui.
+          </li>
+        </ul>
       </div>
 
-      {/* Falado explicitamente porque a expectativa natural é que "projetar o
-          aviso" inclua a arte — e descobrir isso ao vivo, no domingo, é o
-          pior momento possível. */}
+      {/* A arte era mesmo impossível antes do Conector — e o texto antigo
+          ("projete à mão") virou o oposto da verdade quando ele passou a
+          gravar o arquivo na pasta de Fotos. */}
       <p className="mt-3 text-[12px] leading-relaxed text-texto-fraco">
         <strong className="font-semibold text-texto-suave">
-          Imagem não vai automático.
+          A arte só sobe pelo Conector.
         </strong>{' '}
-        A API do Holyrics só exibe artes que já estão na aba de arquivos dele —
-        não existe envio de imagem de fora. Avisos com arte precisam ser
-        projetados à mão; o texto vai normalmente.
+        A API do Holyrics não recebe imagem de fora — quem resolve é o Conector,
+        gravando o arquivo na pasta de Fotos dele antes de mandar exibir. Com o
+        Conector rodando, &ldquo;Projetar a arte agora&rdquo; funciona sozinho;
+        sem ele, só o texto vai.
       </p>
     </aside>
   );
