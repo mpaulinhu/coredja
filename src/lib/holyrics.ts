@@ -108,11 +108,16 @@ function comHostLocal(url: string): string {
 /** Sonda barata (só leitura) para decidir qual endereço usar. */
 async function atendeEm(url: string, token: string): Promise<boolean> {
   try {
-    const r = await fetch(
+    await fetch(
       `${url}/api/GetCommunicationPanelInfo?token=${encodeURIComponent(token)}`,
       { method: 'GET', signal: AbortSignal.timeout(3000), cache: 'no-store' },
     );
-    return r.ok;
+    // Qualquer resposta serve, inclusive erro — ver o mesmo raciocínio em
+    // `respondeEm` no `firestore.ts` da ponte: a pergunta é se há um Holyrics
+    // ouvindo aqui, não se ele autoriza esta leitura. Com `r.ok` (falso num
+    // 401 de permissão), uma ação não liberada fazia o fallback `localhost`
+    // ser descartado justamente quando ele era a saída.
+    return true;
   } catch {
     return false;
   }
