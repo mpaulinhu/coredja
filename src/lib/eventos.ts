@@ -17,7 +17,11 @@
 export type TipoEvento =
   | 'mensagem-nova'
   | 'mensagem-resolvida'
-  | 'mensagem-reaberta';
+  | 'mensagem-reaberta'
+  /** Um recado apagado de vez — diferente de resolvido, não volta. */
+  | 'mensagem-apagada'
+  /** A conversa inteira foi limpa: a tela deve esvaziar aquele departamento. */
+  | 'conversa-apagada';
 
 export interface Evento {
   tipo: TipoEvento;

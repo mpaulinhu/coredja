@@ -283,4 +283,50 @@ export const firebaseStore: Store = {
     const depois = await ref.get();
     return paraMensagem(depois.id, depois.data()!);
   },
+
+  async apagarMensagem(id) {
+    await garantirSemeadura();
+    await db().collection(COLECAO_MENSAGENS).doc(id).delete();
+  },
+
+  async apagarConversa(conversaId) {
+    await garantirSemeadura();
+    const snap = await db()
+      .collection(COLECAO_MENSAGENS)
+      .where('conversaId', '==', conversaId)
+      .get();
+    return apagarEmLotes(snap.docs.map((d) => d.ref));
+  },
+
+  async apagarResolvidosAntigos(dias) {
+    await garantirSemeadura();
+    const limite = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+
+    // `resolvidaEm` guarda ISO 8601, que ordena igual como texto — então o
+    // `<` compara datas corretamente sem conversão. Recado pendente tem o
+    // campo `null` e não entra na consulta, que é justamente o que se quer.
+    const snap = await db()
+      .collection(COLECAO_MENSAGENS)
+      .where('resolvidaEm', '<', limite)
+      .get();
+    return apagarEmLotes(snap.docs.map((d) => d.ref));
+  },
 };
+
+/**
+ * Apaga em lotes de 500 — o teto de operações por batch do Firestore.
+ *
+ * Uma conversa de meses de culto passa disso com folga, e um batch acima do
+ * limite falha inteiro, sem apagar nada.
+ */
+async function apagarEmLotes(
+  refs: FirebaseFirestore.DocumentReference[],
+): Promise<number> {
+  const TAMANHO = 500;
+  for (let i = 0; i < refs.length; i += TAMANHO) {
+    const lote = db().batch();
+    refs.slice(i, i + TAMANHO).forEach((ref) => lote.delete(ref));
+    await lote.commit();
+  }
+  return refs.length;
+}

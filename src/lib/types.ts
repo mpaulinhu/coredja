@@ -125,4 +125,20 @@ export interface Store {
   resolverMensagem(id: string): Promise<Mensagem | null>;
   /** Devolve um recado resolvido para a lista de pendentes. */
   reabrirMensagem(id: string): Promise<Mensagem | null>;
+
+  /**
+   * Apaga um recado de vez. Diferente de resolver, que só o tira da lista
+   * ativa e o guarda no histórico — aqui não há como desfazer.
+   */
+  apagarMensagem(id: string): Promise<void>;
+  /** Apaga TODOS os recados de uma conversa. Devolve quantos saíram. */
+  apagarConversa(conversaId: string): Promise<number>;
+  /**
+   * Apaga recados resolvidos há mais de `dias`. Devolve quantos saíram.
+   *
+   * Só mexe em resolvido: um recado que ninguém resolveu ainda importa,
+   * por mais antigo que seja, e sumir com ele sozinho seria perder o que
+   * alguém ainda espera ver.
+   */
+  apagarResolvidosAntigos(dias: number): Promise<number>;
 }

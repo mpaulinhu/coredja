@@ -291,4 +291,30 @@ export const sqliteStore: Store = {
       .run(id);
     return buscarMensagem(id);
   },
+
+  async apagarMensagem(id) {
+    garantirSemeadura();
+    getDb().prepare('DELETE FROM mensagens WHERE id = ?').run(id);
+  },
+
+  async apagarConversa(conversaId) {
+    garantirSemeadura();
+    const r = getDb()
+      .prepare('DELETE FROM mensagens WHERE conversa_id = ?')
+      .run(conversaId);
+    return r.changes;
+  },
+
+  async apagarResolvidosAntigos(dias) {
+    garantirSemeadura();
+    const limite = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+    // `resolvida_em IS NOT NULL` mantém o pendente fora, por mais antigo
+    // que seja — mesma regra da versão Firestore.
+    const r = getDb()
+      .prepare(
+        'DELETE FROM mensagens WHERE resolvida_em IS NOT NULL AND resolvida_em < ?',
+      )
+      .run(limite);
+    return r.changes;
+  },
 };

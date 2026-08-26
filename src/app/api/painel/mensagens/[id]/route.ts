@@ -1,5 +1,6 @@
 import { conversaTemUrgencia } from '@/lib/conversas';
 import { publicar } from '@/lib/eventos';
+import { podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 import { store } from '@/lib/store';
 
@@ -76,4 +77,41 @@ export async function PATCH(
   );
 
   return Response.json({ mensagem });
+}
+
+/**
+ * Apaga um recado de vez.
+ *
+ * Diferente de `resolver`, que só o tira da conversa e o guarda no
+ * histórico: aqui não há como desfazer, e por isso a trava é a de
+ * administração (`departamentos:escrever`) e não a de operar o painel —
+ * quem está na cabine no domingo resolve recado o tempo todo, e um apagar
+ * ao lado do resolver, com a mesma permissão, seria fácil de errar no meio
+ * do culto.
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const pessoa = await pessoaDaRequisicao(request);
+  if (!pessoa) {
+    return Response.json({ erro: 'Não autenticado.' }, { status: 401 });
+  }
+  if (!podeFazer(pessoa.papel, 'departamentos:escrever')) {
+    return Response.json(
+      { erro: 'Só quem administra o Coredja apaga recado.' },
+      { status: 403 },
+    );
+  }
+
+  const { id } = await params;
+  const atual = await store.buscarMensagem(id);
+  if (!atual) {
+    return Response.json({ erro: 'Recado não encontrado.' }, { status: 404 });
+  }
+
+  await store.apagarMensagem(id);
+  publicar('mensagem-apagada', atual.conversaId);
+
+  return Response.json({ ok: true });
 }

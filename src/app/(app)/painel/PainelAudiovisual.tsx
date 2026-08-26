@@ -66,6 +66,14 @@ function contem(texto: string, termo: string): boolean {
 export function PainelAudiovisual() {
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [meuDepartamento, setMeuDepartamento] = useState<string | null>(null);
+  /**
+   * Se quem está olhando pode APAGAR recado, e não só resolver.
+   *
+   * Vem do servidor a cada carga (`/api/painel/mensagens`), que é quem sabe
+   * o papel. A tela usa isto só para não oferecer um botão que seria
+   * recusado — cada rota de apagar confere de novo por conta própria.
+   */
+  const [podeApagar, setPodeApagar] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [som, setSom] = useState(true);
@@ -113,7 +121,9 @@ export function PainelAudiovisual() {
       const dados = (await resposta.json()) as {
         conversas: Conversa[];
         meuDepartamento: string | null;
+        podeApagar?: boolean;
       };
+      setPodeApagar(dados.podeApagar === true);
       const todas = dados.conversas.flatMap((c) => c.mensagens);
 
       // Toca apenas para recados vindos de outro departamento: a própria
@@ -281,6 +291,51 @@ export function PainelAudiovisual() {
     [pintarEstado, enviarEstado, recarregar],
   );
 
+  /**
+   * Apaga um recado de vez.
+   *
+   * `confirm` do navegador, e não um diálogo próprio: é ação rara, feita fora
+   * do domingo, e uma caixa que trava a tela é exatamente o atrito que se
+   * quer antes de algo sem desfazer. Vale mais que um modal bonito aqui.
+   */
+  const apagarMensagem = useCallback(
+    async (id: string) => {
+      if (!confirm('Apagar este recado de vez? Não tem como desfazer.')) return;
+
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return;
+      await fetch(`/api/painel/mensagens/${id}`, {
+        method: 'DELETE',
+        headers: cabecalho,
+      });
+      await recarregar();
+    },
+    [recarregar],
+  );
+
+  /** Apaga TODOS os recados da conversa aberta — a faxina de fim de culto. */
+  const limparConversa = useCallback(
+    async (conversaId: string, nomeDoOutroLado: string) => {
+      if (
+        !confirm(
+          `Apagar TODOS os recados da conversa com ${nomeDoOutroLado}?\n\n` +
+            'Inclui os pendentes. Não tem como desfazer.',
+        )
+      ) {
+        return;
+      }
+
+      const cabecalho = await cabecalhoDeAutorizacao();
+      if (!cabecalho) return;
+      await fetch(`/api/painel/conversas/${encodeURIComponent(conversaId)}`, {
+        method: 'DELETE',
+        headers: cabecalho,
+      });
+      await recarregar();
+    },
+    [recarregar],
+  );
+
   const totalPendentes = conversas.reduce((soma, c) => soma + c.pendentes, 0);
 
   const termo = busca.trim().toLowerCase();
@@ -338,6 +393,16 @@ export function PainelAudiovisual() {
             aoAlternarResolvidos={() => setMostrarResolvidos((v) => !v)}
             aoMudarEstado={mudarEstado}
             aoResolverTodos={resolverTodos}
+            aoApagarMensagem={podeApagar ? apagarMensagem : null}
+            aoLimparConversa={
+              podeApagar
+                ? () =>
+                    limparConversa(
+                      idDaConversa(aberta.deptoA.slug, aberta.deptoB.slug),
+                      outroLado(aberta, meuDepartamento).nome,
+                    )
+                : null
+            }
             aoEnviar={recarregar}
             aoVoltar={() => setVerConversaNoCelular(false)}
           />
@@ -618,6 +683,8 @@ function PainelDaConversa({
   aoAlternarResolvidos,
   aoMudarEstado,
   aoResolverTodos,
+  aoApagarMensagem,
+  aoLimparConversa,
   aoEnviar,
   aoVoltar,
 }: {
@@ -629,6 +696,10 @@ function PainelDaConversa({
   aoAlternarResolvidos: () => void;
   aoMudarEstado: (id: string, acao: 'resolver' | 'reabrir') => Promise<void>;
   aoResolverTodos: (ids: string[]) => Promise<void>;
+  /** Apaga um recado de vez. `null` quando quem está olhando não pode apagar. */
+  aoApagarMensagem: ((id: string) => Promise<void>) | null;
+  /** Apaga a conversa inteira. `null` quando quem está olhando não pode. */
+  aoLimparConversa: (() => Promise<void>) | null;
   aoEnviar: () => Promise<void>;
   aoVoltar: () => void;
 }) {
@@ -706,6 +777,22 @@ function PainelDaConversa({
               {mostrarResolvidos
                 ? 'Ocultar resolvidos'
                 : `Ver resolvidos (${ocultos})`}
+            </button>
+          )}
+
+          {/* Limpar a conversa é a faxina de fim de culto: resolver guarda no
+              histórico para sempre, isto apaga de vez. Fica discreto e longe
+              do "Resolver todos" de propósito — os dois são ações de fim de
+              conversa, e um clique errado aqui não tem desfazer. Só aparece
+              para quem administra (a prop vem `null` para os outros). */}
+          {aoLimparConversa && total > 0 && (
+            <button
+              type="button"
+              onClick={aoLimparConversa}
+              title="Apaga todos os recados desta conversa, inclusive os pendentes. Não tem como desfazer."
+              className="hidden h-10 items-center rounded-xl border border-borda bg-fundo-cartao px-4 text-[13px] font-semibold text-texto-fraco transition-colors hover:text-texto sm:flex"
+            >
+              Limpar conversa
             </button>
           )}
 
@@ -799,6 +886,7 @@ function PainelDaConversa({
                 meuDepartamento={meuDepartamento}
                 temUrgencia={conversa.temUrgencia}
                 aoMudarEstado={aoMudarEstado}
+                aoApagarMensagem={aoApagarMensagem}
               />
             ))}
           </ul>
@@ -838,6 +926,7 @@ function BalaoDoPainel({
   meuDepartamento,
   temUrgencia,
   aoMudarEstado,
+  aoApagarMensagem,
 }: {
   mensagem: Mensagem;
   /** Nome do departamento do outro lado, para assinar o recado dele. */
@@ -845,6 +934,8 @@ function BalaoDoPainel({
   meuDepartamento: string | null;
   temUrgencia: boolean;
   aoMudarEstado: (id: string, acao: 'resolver' | 'reabrir') => Promise<void>;
+  /** `null` quando quem está olhando não pode apagar — o botão some. */
+  aoApagarMensagem: ((id: string) => Promise<void>) | null;
 }) {
   const doOutroLado = mensagem.remetente !== meuDepartamento;
   const urgente = temUrgencia && mensagem.prioridade === 'urgente';
@@ -957,6 +1048,21 @@ function BalaoDoPainel({
               </button>
             )}
           </div>
+        )}
+
+        {/* Apagar de vez. Discreto e sem cor de alerta de propósito: alarde
+            visual em algo raro só faria a pessoa reparar nele o tempo todo.
+            A confirmação é que segura o clique errado. Só aparece para quem
+            administra — a prop vem `null` para os outros. */}
+        {aoApagarMensagem && (
+          <button
+            type="button"
+            onClick={() => void aoApagarMensagem(mensagem.id)}
+            title="Apagar este recado de vez. Não tem como desfazer."
+            className="self-start text-[12px] font-semibold text-texto-fraco underline underline-offset-2 transition-colors hover:text-texto"
+          >
+            apagar
+          </button>
         )}
       </div>
     </li>

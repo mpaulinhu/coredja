@@ -1,7 +1,7 @@
 import { conversaTemUrgencia, montarConversas } from '@/lib/conversas';
 import { publicar } from '@/lib/eventos';
 import { MAXIMO_ANEXOS, TAMANHO_MAXIMO_TEXTO } from '@/lib/limites';
-import { podeConversarCom } from '@/lib/papeis';
+import { podeConversarCom, podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 import { store } from '@/lib/store';
 import { ErroDeUpload, salvarImagem } from '@/lib/uploads';
@@ -35,6 +35,11 @@ export async function GET(request: Request) {
   return Response.json({
     conversas: await montarConversas(pessoa),
     meuDepartamento: pessoa.departamento ?? null,
+    // Se esta pessoa pode APAGAR recado (irreversível), e não só resolver.
+    // A tela usa para decidir se mostra os botões de apagar — o servidor
+    // confere de novo em cada rota, então isto é só para não oferecer o que
+    // seria recusado.
+    podeApagar: podeFazer(pessoa.papel, 'departamentos:escrever'),
   });
 }
 
