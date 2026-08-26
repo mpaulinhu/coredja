@@ -35,16 +35,32 @@ self.addEventListener('push', (evento) => {
     body: dados.corpo || 'Você tem um recado novo.',
     icon: '/icone-192.png',
     badge: '/icone-192.png',
-    // Vibração curta-longa-curta: dá para reconhecer no bolso sem olhar.
-    vibrate: dados.urgente ? [200, 100, 200, 100, 200] : [150, 75, 150],
+    // Vibração longa e repetida no urgente — o padrão do sistema é discreto
+    // demais para um recado que precisa interromper alguém no meio do culto.
+    vibrate: dados.urgente
+      ? [300, 120, 300, 120, 300, 120, 400]
+      : [200, 100, 200],
     // Recados da MESMA conversa se substituem em vez de empilhar cinco
     // avisos iguais — quem chega no aparelho quer saber que há recado ali,
     // não receber um alerta por mensagem.
     tag: dados.conversaId || 'coredja',
     renotify: true,
-    data: { url: dados.url || '/painel' },
+    data: {
+      url: dados.url || '/painel',
+      conversaId: dados.conversaId || '',
+    },
     // Urgente exige toque para sumir; o normal some sozinho.
     requireInteraction: Boolean(dados.urgente),
+    // ┌─ POR QUE "RESPONDER" E NÃO UM CAMPO DE TEXTO ────────────────────────┐
+    // Responder digitando DENTRO da notificação, como no WhatsApp, é recurso
+    // de aplicativo nativo — o Web Push não tem campo de entrada em nenhum
+    // navegador. O que dá é levar direto ao lugar de responder, com o campo
+    // já focado: um toque a mais, sem a navegação no meio.
+    // └─────────────────────────────────────────────────────────────────────┘
+    actions: [
+      { action: 'responder', title: 'Responder' },
+      { action: 'abrir', title: 'Ver recado' },
+    ],
   };
 
   evento.waitUntil(self.registration.showNotification(titulo, opcoes));
@@ -52,17 +68,30 @@ self.addEventListener('push', (evento) => {
 
 self.addEventListener('notificationclick', (evento) => {
   evento.notification.close();
-  const destino = (evento.notification.data && evento.notification.data.url) || '/painel';
+
+  const info = evento.notification.data || {};
+  // `?responder=<conversa>` faz o painel abrir aquela conversa e focar o
+  // campo de escrita — ver `PainelAudiovisual`.
+  const destino =
+    evento.action === 'responder' && info.conversaId
+      ? `/painel?responder=${encodeURIComponent(info.conversaId)}`
+      : info.url || '/painel';
 
   // Reaproveita uma aba já aberta do Coredja em vez de abrir outra: quem
   // toca na notificação quer VER o recado, e uma segunda aba do mesmo site
-  // é só confusão.
+  // é só confusão. `navigate` leva a aba existente ao destino certo — sem
+  // isso, um "Responder" numa aba já aberta noutra conversa só daria foco,
+  // deixando a pessoa na conversa errada.
   evento.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((abas) => {
         for (const aba of abas) {
-          if (aba.url.includes(destino) && 'focus' in aba) return aba.focus();
+          if (aba.url.includes('/painel')) {
+            return ('navigate' in aba ? aba.navigate(destino) : Promise.resolve(aba))
+              .then((alvo) => (alvo && 'focus' in alvo ? alvo.focus() : null))
+              .catch(() => aba.focus());
+          }
         }
         return self.clients.openWindow(destino);
       }),

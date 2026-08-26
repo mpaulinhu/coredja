@@ -80,6 +80,7 @@ export function BotaoNotificacoes() {
     })().catch(() => setEstado('sem-suporte'));
   }, []);
 
+
   const ligar = useCallback(async () => {
     setOcupado(true);
     try {
@@ -131,6 +132,34 @@ export function BotaoNotificacoes() {
       setOcupado(false);
     }
   }, []);
+
+  /**
+   * Pede a permissão sozinho, uma vez por aparelho.
+   *
+   * O navegador só deixa pedir uma vez: recusado, o botão não consegue mais
+   * abrir o pedido — a pessoa teria que ir nas configurações. Por isso o
+   * `perguntou` no `localStorage`: reabrir o Coredja não gasta a única
+   * chance de novo, e quem já decidiu (dos dois jeitos) não é incomodado.
+   *
+   * Só dispara quando há o que ativar: estado `desligado` e permissão ainda
+   * em `default`.
+   */
+  useEffect(() => {
+    if (estado !== 'desligado') return;
+    if (Notification.permission !== 'default') return;
+    try {
+      if (localStorage.getItem('coredja:push-perguntado') === 'sim') return;
+      localStorage.setItem('coredja:push-perguntado', 'sim');
+    } catch {
+      // Navegador sem localStorage (aba anônima): perguntar mesmo assim é
+      // melhor que nunca perguntar.
+    }
+    // Um respiro antes de perguntar: a caixa do navegador aparecendo no mesmo
+    // instante em que a tela carrega parece pop-up e é recusada no reflexo.
+    const id = setTimeout(() => void ligar(), 1500);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado]);
 
   const desligar = useCallback(async () => {
     setOcupado(true);

@@ -85,8 +85,23 @@ export function PainelAudiovisual() {
   const [busca, setBusca] = useState('');
   // No celular a lista e a conversa não cabem lado a lado — ver `ListaDeConversas`.
   const [verConversaNoCelular, setVerConversaNoCelular] = useState(false);
+  /** Pedido de foco no campo de escrita, vindo do "Responder" da notificação. */
+  const [focarCampo, setFocarCampo] = useState(false);
 
   const { tocar, liberar } = useAlertaSonoro(som);
+
+  /**
+   * Conversa pedida pela notificação (`/painel?responder=<conversaId>`).
+   *
+   * Lido uma vez, no primeiro render: depois de abrir a conversa o parâmetro
+   * é apagado da URL, senão um F5 mais tarde reabriria a mesma conversa e
+   * roubaria o foco de quem já estava noutra.
+   */
+  const conversaPedida = useRef<string | null>(
+    typeof window === 'undefined'
+      ? null
+      : new URLSearchParams(window.location.search).get('responder'),
+  );
 
   // Guarda os identificadores já vistos para tocar o som só em recado
   // realmente novo — sem isso, resolver um recado dispararia o alerta.
@@ -153,6 +168,23 @@ export function PainelAudiovisual() {
       // Abre a primeira conversa assim que a lista chega, se nenhuma estiver
       // aberta ainda (ou se a que estava aberta sumiu da lista).
       setAbertaId((atual) => {
+        // A conversa que a notificação pediu ganha da que estava aberta —
+        // quem tocou em "Responder" quer ir para AQUELA conversa.
+        const pedida = conversaPedida.current;
+        if (pedida) {
+          const existe = dados.conversas.some(
+            (c) => idDaConversa(c.deptoA.slug, c.deptoB.slug) === pedida,
+          );
+          conversaPedida.current = null;
+          // Limpa o parâmetro sem recarregar a página.
+          window.history.replaceState({}, '', '/painel');
+          if (existe) {
+            setVerConversaNoCelular(true);
+            setFocarCampo(true);
+            return pedida;
+          }
+        }
+
         const aindaExiste =
           atual &&
           dados.conversas.some(
@@ -357,6 +389,15 @@ export function PainelAudiovisual() {
     });
   }, [conversas, termo]);
 
+  // Consome o pedido de foco: sem isto, `focarCampo` ficaria `true` para
+  // sempre e toda troca de conversa roubaria o cursor para o campo de
+  // escrita, mesmo sem ninguém ter vindo de uma notificação.
+  useEffect(() => {
+    if (!focarCampo) return;
+    const id = setTimeout(() => setFocarCampo(false), 600);
+    return () => clearTimeout(id);
+  }, [focarCampo]);
+
   function escolher(id: string) {
     setAbertaId(id);
     setMostrarResolvidos(false);
@@ -409,6 +450,7 @@ export function PainelAudiovisual() {
                 : null
             }
             podePublicarNoTelao={podePublicarNoTelao}
+            focarAoAbrir={focarCampo}
             aoEnviar={recarregar}
             aoVoltar={() => setVerConversaNoCelular(false)}
           />
@@ -699,6 +741,7 @@ function PainelDaConversa({
   aoApagarMensagem,
   aoLimparConversa,
   podePublicarNoTelao,
+  focarAoAbrir,
   aoEnviar,
   aoVoltar,
 }: {
@@ -716,6 +759,8 @@ function PainelDaConversa({
   aoLimparConversa: (() => Promise<void>) | null;
   /** Só quem opera o telão vê o atalho para a tela de Avisos. */
   podePublicarNoTelao: boolean;
+  /** Repassado ao campo de escrita — ver `focarAoAbrir` lá. */
+  focarAoAbrir: boolean;
   aoEnviar: () => Promise<void>;
   aoVoltar: () => void;
 }) {
@@ -919,6 +964,7 @@ function PainelDaConversa({
         nomeDoLado={lado.nome}
         temUrgencia={conversa.temUrgencia}
         podePublicarNoTelao={podePublicarNoTelao}
+        focarAoAbrir={focarAoAbrir}
         aoEnviar={aoEnviar}
       />
     </>
@@ -1092,6 +1138,7 @@ function CampoDeResposta({
   nomeDoLado,
   temUrgencia,
   podePublicarNoTelao,
+  focarAoAbrir,
   aoEnviar,
 }: {
   conversaId: string;
@@ -1100,6 +1147,8 @@ function CampoDeResposta({
   temUrgencia: boolean;
   /** Só quem opera o telão vê o atalho para a tela de Avisos. */
   podePublicarNoTelao: boolean;
+  /** Foca o campo ao montar — usado pelo "Responder" da notificação. */
+  focarAoAbrir: boolean;
   aoEnviar: () => Promise<void>;
 }) {
   const [texto, setTexto] = useState('');
@@ -1109,6 +1158,14 @@ function CampoDeResposta({
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
+
+  // Foco vindo do "Responder" da notificação. No celular o teclado só sobe
+  // com o foco vindo de um gesto — o toque na notificação conta, mas o
+  // navegador precisa do campo já montado, daí o efeito e não o `autoFocus`.
+  useEffect(() => {
+    if (focarAoAbrir) campo.current?.focus();
+  }, [focarAoAbrir]);
+
   const inputArquivo = useRef<HTMLInputElement>(null);
 
   const temConteudo = texto.trim().length > 0 || imagens.length > 0;
