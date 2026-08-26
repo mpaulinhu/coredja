@@ -34,7 +34,14 @@ self.addEventListener('push', (evento) => {
   const opcoes = {
     body: dados.corpo || 'Você tem um recado novo.',
     icon: '/icone-192.png',
-    badge: '/icone-192.png',
+    // Ícone PRÓPRIO, com fundo transparente — não serve o do app.
+    //
+    // O Android renderiza o `badge` como silhueta: descarta as cores e pinta
+    // de branco tudo que for opaco. Com o ícone do app (um quadrado azul
+    // cheio) o resultado era um bloco branco sólido na barra de status, sem
+    // desenho — o mesmo ícone aparecia certo só ao expandir a notificação,
+    // porque ali quem manda é o `icon`. Ver `scripts/gerar-badge.mjs`.
+    badge: '/badge-96.png',
     // Vibração longa e repetida no urgente — o padrão do sistema é discreto
     // demais para um recado que precisa interromper alguém no meio do culto.
     vibrate: dados.urgente
