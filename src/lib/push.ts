@@ -132,6 +132,18 @@ export async function notificar(uids: string[], aviso: Aviso): Promise<number> {
         await webpush.sendNotification(
           { endpoint: inscricao.endpoint, keys: inscricao.keys },
           corpo,
+          {
+            // `high` pede ao Google/Apple para acordar o aparelho em vez de
+            // segurar o aviso para a próxima janela de economia de bateria.
+            // Sem isto, um recado pode chegar minutos depois num celular
+            // ocioso — inaceitável para algo que se lê durante o culto.
+            urgency: 'high',
+            // Quanto tempo o serviço guarda o aviso se o aparelho estiver
+            // fora do ar. 4 horas cobre um culto inteiro e a viagem de
+            // volta; mais que isso entregaria recado velho, que atrapalha
+            // mais do que ajuda.
+            TTL: 4 * 60 * 60,
+          },
         );
         entregues += 1;
       } catch (erro) {
