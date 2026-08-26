@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BotaoNotificacoes } from '@/components/BotaoNotificacoes';
 import { ImagemAnexo } from '@/components/ImagemAnexo';
 import { useAlertaSonoro } from '@/hooks/useAlertaSonoro';
 import { useEventos } from '@/hooks/useEventos';
@@ -662,6 +663,13 @@ function ListaDeConversas({
             })}
           </ul>
         )}
+      </div>
+
+      {/* No rodapé da lista, e não no cabeçalho: ativar notificação é coisa
+          de uma vez só por aparelho — no topo, competiria por atenção com a
+          busca e as conversas, que é o que se usa toda hora. */}
+      <div className="shrink-0 border-t border-borda p-3.5">
+        <BotaoNotificacoes />
       </div>
 
       {/* Criar departamento é CRUD de admin e já tem tela própria — daqui o

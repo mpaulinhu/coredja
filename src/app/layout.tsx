@@ -4,6 +4,15 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Coredja',
   description: 'Comunicação interna da igreja',
+  // O manifest é o que torna o site "instalável" na tela inicial — e, no
+  // iPhone, condição para a notificação funcionar (o Safari só entrega push
+  // quando o site foi aberto pelo ícone). Ver `BotaoNotificacoes`.
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, title: 'Coredja', statusBarStyle: 'black-translucent' },
+  icons: {
+    icon: [{ url: '/icone-192.png', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/icone-192.png', sizes: '192x192' }],
+  },
 };
 
 export const viewport: Viewport = {

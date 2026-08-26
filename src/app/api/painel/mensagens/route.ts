@@ -2,6 +2,7 @@ import { conversaTemUrgencia, montarConversas } from '@/lib/conversas';
 import { publicar } from '@/lib/eventos';
 import { MAXIMO_ANEXOS, TAMANHO_MAXIMO_TEXTO } from '@/lib/limites';
 import { podeConversarCom, podeFazer } from '@/lib/papeis';
+import { notificarRecadoNovo } from '@/lib/push';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 import { store } from '@/lib/store';
 import { ErroDeUpload, salvarImagem } from '@/lib/uploads';
@@ -174,6 +175,22 @@ export async function POST(request: Request) {
   });
 
   publicar('mensagem-nova', conversaId);
+
+  // Notificação no celular de quem participa da conversa, mesmo com o site
+  // fechado. Sem `await`: entregar o recado é o que importa, e esperar o
+  // envio (que fala com Google/Apple) atrasaria a resposta de quem clicou
+  // em Enviar. `notificarRecadoNovo` nunca lança — ver `push.ts`.
+  const departamentoQueEscreveu = (await store.listarDepartamentos()).find(
+    (d) => d.slug === pessoa.departamento,
+  );
+  void notificarRecadoNovo({
+    conversaId,
+    remetente: pessoa.departamento,
+    nomeDoRemetente: departamentoQueEscreveu?.nome ?? pessoa.departamento,
+    texto,
+    urgente: prioridade === 'urgente',
+    autorUid: pessoa.uid,
+  });
 
   return Response.json({ mensagem }, { status: 201 });
 }
