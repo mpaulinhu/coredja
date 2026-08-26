@@ -6,6 +6,7 @@ import type { Departamento } from '@/lib/types';
 import type { AreaResumo } from './TelaUsuarios';
 import { TODOS_OS_PAPEIS } from './TelaUsuarios';
 import { SeletorPapeis } from './SeletorPapeis';
+import { SeletorAbas } from './SeletorAbas';
 import { SeletorAreas } from './SeletorAreas';
 import { SeletorDepartamento } from './SeletorDepartamento';
 
@@ -17,6 +18,7 @@ interface Props {
     papel: Papel,
     departamento: string | null,
     areasVisiveis: string[],
+    abas: string[] | null,
   ) => Promise<void>;
   onRemover: () => Promise<void>;
 }
@@ -27,6 +29,8 @@ export function LinhaPessoa({ pessoa, areas, departamentos, onAtualizar, onRemov
   const [papel, setPapel] = useState<Papel>(pessoa.papel);
   const [departamento, setDepartamento] = useState<string | null>(pessoa.departamento ?? null);
   const [areasVisiveis, setAreasVisiveis] = useState<string[]>(pessoa.areasVisiveis ?? []);
+  // `null` = sem escolha própria, segue o padrão do cargo.
+  const [abas, setAbas] = useState<string[] | null>(pessoa.abas ?? null);
   const [salvando, setSalvando] = useState(false);
 
   async function salvar() {
@@ -37,6 +41,7 @@ export function LinhaPessoa({ pessoa, areas, departamentos, onAtualizar, onRemov
       papel,
       departamento,
       areasVisiveis.filter((slug) => slug !== departamento),
+      abas,
     );
     setSalvando(false);
     setEditando(false);
@@ -106,6 +111,14 @@ export function LinhaPessoa({ pessoa, areas, departamentos, onAtualizar, onRemov
               />
             </div>
           )}
+
+          <div>
+            <p className="mb-1.5 text-sm text-texto-suave">
+              Telas no menu{' '}
+              <span className="text-texto-fraco">· o que aparece pra ela</span>
+            </p>
+            <SeletorAbas papel={papel} selecionadas={abas} onMudar={setAbas} />
+          </div>
 
           <button
             type="button"

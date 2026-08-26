@@ -27,17 +27,22 @@
  * abaixo dele fazem — não precisa marcar vários.
  *
  * - `admin`: gerencia quem tem conta e o que cada pessoa pode ver, mais tudo
- *   que Líder, Coordenador e Operador fazem.
- * - `lider`: monta a ordem do culto e os avisos, mais tudo que Coordenador e
- *   Operador fazem.
- * - `coordenador`: monta a escala do time, mais tudo que Operador faz.
- * - `operador`: só executa no domingo — avança a ordem, publica o aviso no
- *   telão, marca presença. Não edita o que foi preparado na semana.
+ *   que Líder e Operador fazem.
+ * - `lider`: monta a ordem do culto e os avisos, mais tudo que o Operador faz.
+ * - `operador`: executa no domingo — avança a ordem, publica o aviso no
+ *   telão, usa as mensagens da transmissão. Não edita o que foi preparado
+ *   na semana.
  * - `area`: não é um cargo de pessoa — existe aqui só para o código que
  *   confere permissão poder tratar link-de-área e login-de-pessoa de forma
  *   parecida quando fizer sentido. Fica fora da hierarquia numérica abaixo.
+ *
+ * Havia um quarto cargo, `coordenador`, entre Líder e Operador. Ele existia
+ * para a Escala do Time — que saiu do menu quando a igreja passou a usar o
+ * Voluts (19/08/2026) — e ficou carregando só a permissão das mensagens da
+ * transmissão, que agora é do Operador. Um cargo a menos é um a menos para
+ * explicar a quem cadastra gente (26/08/2026).
  */
-export type Papel = 'admin' | 'lider' | 'coordenador' | 'operador' | 'area';
+export type Papel = 'admin' | 'lider' | 'operador' | 'area';
 
 /**
  * Nível numérico de cada cargo de pessoa — quanto menor, mais amplo. Não
@@ -46,8 +51,7 @@ export type Papel = 'admin' | 'lider' | 'coordenador' | 'operador' | 'area';
 export const NIVEL_PAPEL: Record<Exclude<Papel, 'area'>, number> = {
   admin: 0,
   lider: 1,
-  coordenador: 2,
-  operador: 3,
+  operador: 2,
 };
 
 /**
@@ -78,6 +82,67 @@ export interface Pessoa {
   departamento?: string;
   /** Slugs dos departamentos com quem esta pessoa pode abrir conversa. */
   areasVisiveis?: string[];
+  /**
+   * Quais telas aparecem no menu desta pessoa (ver `ABAS`).
+   *
+   * Ausente = o padrão do cargo dela (`abasPadrao`). É o que faz toda conta
+   * criada antes deste campo existir continuar funcionando, e é também o que
+   * se quer na maioria dos casos: o admin só mexe aqui quando alguém foge da
+   * regra — o operador que também organiza os avisos, o líder que não deve
+   * ver Configurações.
+   *
+   * Esconder aba NÃO é permissão: a trava de verdade continua em cada rota
+   * do servidor, que confere o papel a cada requisição. Isto é sobre não
+   * poluir o menu de quem nunca vai usar aquela tela.
+   */
+  abas?: string[];
+}
+
+/** Uma tela do menu que pode ser ligada/desligada por pessoa. */
+export interface Aba {
+  /** Id estável, gravado no documento da pessoa. Casa com a rota. */
+  id: string;
+  rotulo: string;
+  /** Cargo mínimo que costuma usar esta tela — vira o padrão em `abasPadrao`. */
+  padraoAPartirDe: Exclude<Papel, 'area'>;
+}
+
+/**
+ * As telas que o admin pode ligar ou desligar por pessoa.
+ *
+ * A ordem é a mesma do menu, para a lista de caixinhas na tela de Usuários
+ * bater com o que a pessoa vai ver.
+ */
+export const ABAS: readonly Aba[] = [
+  { id: 'painel', rotulo: 'Recados', padraoAPartirDe: 'operador' },
+  { id: 'culto', rotulo: 'Ordem do Culto', padraoAPartirDe: 'operador' },
+  { id: 'avisos', rotulo: 'Avisos do Telão', padraoAPartirDe: 'operador' },
+  { id: 'ao-vivo', rotulo: 'Ao Vivo', padraoAPartirDe: 'operador' },
+  { id: 'usuarios', rotulo: 'Usuários', padraoAPartirDe: 'admin' },
+  { id: 'departamentos', rotulo: 'Departamentos', padraoAPartirDe: 'admin' },
+  { id: 'configuracoes', rotulo: 'Configurações', padraoAPartirDe: 'admin' },
+];
+
+/** As abas que um cargo vê quando ninguém escolheu nada para a pessoa. */
+export function abasPadrao(papel: Papel): string[] {
+  if (papel === 'area') return [];
+  return ABAS.filter((aba) => NIVEL_PAPEL[papel] <= NIVEL_PAPEL[aba.padraoAPartirDe]).map(
+    (aba) => aba.id,
+  );
+}
+
+/**
+ * As abas que esta pessoa vê no menu.
+ *
+ * Uma aba escolhida à mão nunca ultrapassa o que o cargo alcança: marcar
+ * "Usuários" para um operador não lhe daria a tela (o servidor recusaria de
+ * qualquer forma), só um item de menu que leva a um erro. Filtrar aqui evita
+ * prometer na navegação o que a permissão nega.
+ */
+export function abasDaPessoa(pessoa: Pick<Pessoa, 'papel' | 'abas'>): string[] {
+  const permitidas = abasPadrao(pessoa.papel);
+  if (!pessoa.abas) return permitidas;
+  return pessoa.abas.filter((id) => permitidas.includes(id));
 }
 
 /**
@@ -99,14 +164,17 @@ const PERMISSOES_PROPRIAS: Record<Exclude<Papel, 'area'>, readonly string[]> = {
   // 'pessoas:escrever': não herda para os demais cargos.
   admin: ['pessoas:escrever', 'departamentos:escrever'],
   lider: ['culto:escrever', 'avisos:escrever'],
-  // 'live:escrever' fica no coordenador, e não no lider como
-  // 'avisos:escrever': quem mantém a biblioteca de mensagens da transmissão
-  // é o time técnico (audiovisual), não quem prepara o culto. Operador
-  // continua de fora — ele COPIA sem permissão nenhuma (copiar é leitura,
-  // ver `GET /api/live/mensagens`) e escreve na hora pelo campo avulso da
-  // tela, que não grava nada.
-  coordenador: ['escala:escrever', 'live:escrever'],
-  operador: ['culto:avancar', 'avisos:publicar', 'escala:presenca'],
+  // `live:escrever` e `escala:escrever` eram do coordenador, que deixou de
+  // existir. Foram para o operador de propósito: quem mantém a biblioteca de
+  // mensagens da transmissão é o time técnico, que é justamente quem opera no
+  // domingo — não quem prepara o culto na semana.
+  operador: [
+    'culto:avancar',
+    'avisos:publicar',
+    'escala:presenca',
+    'escala:escrever',
+    'live:escrever',
+  ],
 };
 
 /** Permissões efetivas de cada cargo, já com a herança dos cargos abaixo somada. */
@@ -119,7 +187,6 @@ function permissoesHerdadas(papel: Exclude<Papel, 'area'>): readonly string[] {
 const PERMISSOES: Record<Papel, readonly string[]> = {
   admin: permissoesHerdadas('admin'),
   lider: permissoesHerdadas('lider'),
-  coordenador: permissoesHerdadas('coordenador'),
   operador: permissoesHerdadas('operador'),
   area: [],
 };

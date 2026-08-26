@@ -28,21 +28,23 @@ import { EquipeDeHoje } from './EquipeDeHoje';
 interface ItemDeMenu {
   href: string;
   rotulo: string;
+  /** Id da aba em `ABAS` (`papeis.ts`) — é o que o admin liga/desliga. */
+  aba: string;
   /** Rotas futuras já aparecem no menu, desativadas, para o conjunto ficar
    *  visível desde já — ver nota em `EM_BREVE` abaixo. */
   emBreve?: boolean;
 }
 
 const ITENS: ItemDeMenu[] = [
-  { href: '/painel', rotulo: 'Recados' },
-  { href: '/culto', rotulo: 'Ordem do Culto' },
-  { href: '/avisos', rotulo: 'Avisos do Telão' },
+  { href: '/painel', rotulo: 'Recados', aba: 'painel' },
+  { href: '/culto', rotulo: 'Ordem do Culto', aba: 'culto' },
+  { href: '/avisos', rotulo: 'Avisos do Telão', aba: 'avisos' },
   // Logo abaixo de Avisos do Telão: são os dois itens do domingo em que
   // alguém pega um texto pronto e o publica em algum lugar — um no telão da
   // igreja, outro no chat da transmissão. Visível a todo mundo logado, e não
   // só a quem cadastra, porque copiar é o uso principal da tela e não exige
   // permissão nenhuma.
-  { href: '/ao-vivo', rotulo: 'Ao Vivo' },
+  { href: '/ao-vivo', rotulo: 'Ao Vivo', aba: 'ao-vivo' },
   // Escala do Time oculta: a igreja já usa o Voluts para isso (19/08/2026).
   // O código continua em src/app/(app)/escala/ e src/lib/escala*.ts, caso
   // um dia volte a fazer sentido — só a entrada de menu foi removida.
@@ -50,11 +52,11 @@ const ITENS: ItemDeMenu[] = [
 
 /** Itens que só o admin vê — ver `ehAdmin` abaixo. */
 const ITENS_DE_ADMIN: ItemDeMenu[] = [
-  { href: '/usuarios', rotulo: 'Usuários' },
-  { href: '/departamentos', rotulo: 'Departamentos' },
+  { href: '/usuarios', rotulo: 'Usuários', aba: 'usuarios' },
+  { href: '/departamentos', rotulo: 'Departamentos', aba: 'departamentos' },
   // Por último de propósito: é a tela que menos se abre no dia a dia — só ao
   // instalar o Coredja em outro lugar, ou quando algo parou de funcionar.
-  { href: '/configuracoes', rotulo: 'Configurações' },
+  { href: '/configuracoes', rotulo: 'Configurações', aba: 'configuracoes' },
 ];
 
 interface MenuLateralProps {
@@ -77,19 +79,22 @@ export function MenuLateral({ aberto, aoFechar }: MenuLateralProps) {
   // responde 403 a quem não é admin, e ler permissão do status HTTP confunde
   // "sem acesso" com "rota fora do ar" — as duas permissões são exclusivas de
   // admin, então um campo explícito cobre os dois itens.
-  const [ehAdmin, setEhAdmin] = useState(false);
+  // `null` enquanto a resposta não chega: mostrar o menu inteiro e depois
+  // encolher faria os itens piscarem a cada carga de página.
+  const [abas, setAbas] = useState<string[] | null>(null);
   useEffect(() => {
     (async () => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return;
-      const resp = await fetch('/api/departamentos', { headers: cabecalho });
+      const resp = await fetch('/api/meu-acesso', { headers: cabecalho });
       if (!resp.ok) return;
-      const dados = await resp.json().catch(() => ({}));
-      setEhAdmin(dados.podeEditar === true);
+      const dados = (await resp.json().catch(() => ({}))) as { abas?: string[] };
+      setAbas(Array.isArray(dados.abas) ? dados.abas : []);
     })();
   }, []);
 
-  const itens = ehAdmin ? [...ITENS, ...ITENS_DE_ADMIN] : ITENS;
+  const itens =
+    abas === null ? [] : [...ITENS, ...ITENS_DE_ADMIN].filter((i) => abas.includes(i.aba));
 
   // Navegar por qualquer caminho (item do menu, ou link dentro do conteúdo
   // da própria página) fecha a gaveta — sem isso ela fica aberta por cima da

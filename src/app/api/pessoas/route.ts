@@ -5,7 +5,7 @@ import { store } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
 
-const PAPEIS_VALIDOS: Papel[] = ['admin', 'lider', 'coordenador', 'operador'];
+const PAPEIS_VALIDOS: Papel[] = ['admin', 'lider', 'operador'];
 
 /**
  * Todas as pessoas com conta no Coredja, mais a lista de áreas (checkboxes
@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     papel?: string;
     departamento?: string;
     areasVisiveis?: string[];
+    abas?: string[];
   };
   try {
     corpo = await request.json();
@@ -72,6 +73,8 @@ export async function POST(request: Request) {
   const papel = PAPEIS_VALIDOS.includes(corpo.papel as Papel) ? (corpo.papel as Papel) : null;
   const departamento = corpo.departamento || undefined;
   const areasVisiveis = corpo.areasVisiveis ?? [];
+  // Ausente = padrão do cargo. Ver `abas` em `Pessoa`.
+  const abas = Array.isArray(corpo.abas) ? corpo.abas : undefined;
 
   if (!nome || !email) {
     return Response.json({ erro: 'Informe nome e e-mail.' }, { status: 400 });
@@ -87,6 +90,7 @@ export async function POST(request: Request) {
       papel,
       departamento,
       areasVisiveis,
+      abas,
     });
     return Response.json({ pessoa: convidada }, { status: 201 });
   } catch (erro) {

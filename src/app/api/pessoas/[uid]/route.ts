@@ -4,7 +4,7 @@ import { pessoaDaRequisicao } from '@/lib/sessao';
 
 export const dynamic = 'force-dynamic';
 
-const PAPEIS_VALIDOS: Papel[] = ['admin', 'lider', 'coordenador', 'operador'];
+const PAPEIS_VALIDOS: Papel[] = ['admin', 'lider', 'operador'];
 
 /** Atualiza papéis e áreas visíveis de uma pessoa já cadastrada. */
 export async function PUT(
@@ -19,7 +19,13 @@ export async function PUT(
     return Response.json({ erro: 'Seu papel não pode editar pessoas.' }, { status: 403 });
   }
 
-  let corpo: { papel?: string; departamento?: string; areasVisiveis?: string[] };
+  let corpo: {
+    papel?: string;
+    departamento?: string;
+    areasVisiveis?: string[];
+    /** Lista = abas escolhidas; `null` = voltar ao padrão do cargo. */
+    abas?: string[] | null;
+  };
   try {
     corpo = await request.json();
   } catch {
@@ -36,6 +42,7 @@ export async function PUT(
     papel,
     departamento: corpo.departamento || undefined,
     areasVisiveis: corpo.areasVisiveis ?? [],
+    abas: corpo.abas === undefined ? undefined : corpo.abas,
   });
   return Response.json({ ok: true });
 }

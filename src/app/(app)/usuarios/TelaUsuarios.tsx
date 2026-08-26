@@ -22,22 +22,19 @@ export const TODOS_OS_PAPEIS: { valor: Papel; rotulo: string; descricao: string 
   {
     valor: 'admin',
     rotulo: 'Admin',
-    descricao: 'Gerencia quem tem conta e o que cada um pode ver — e tudo que Líder, Coordenador e Operador fazem',
+    descricao:
+      'Gerencia contas, departamentos e apaga recado — e tudo que Líder e Operador fazem',
   },
   {
     valor: 'lider',
     rotulo: 'Líder',
-    descricao: 'Monta a ordem do culto e os avisos — e tudo que Coordenador e Operador fazem',
-  },
-  {
-    valor: 'coordenador',
-    rotulo: 'Coordenador',
-    descricao: 'Monta a escala do time — e tudo que Operador faz',
+    descricao: 'Monta a ordem do culto e cadastra os avisos — e tudo que o Operador faz',
   },
   {
     valor: 'operador',
     rotulo: 'Operador',
-    descricao: 'Executa no domingo: avança o culto, publica aviso, marca presença',
+    descricao:
+      'Executa no domingo: avança o culto, publica aviso e arte, usa as mensagens da transmissão',
   },
 ];
 
@@ -112,13 +109,14 @@ export function TelaUsuarios() {
       papel: Papel,
       departamento: string | null,
       areasVisiveis: string[],
+      abas: string[] | null,
     ) => {
       const cabecalho = await cabecalhoDeAutorizacao();
       if (!cabecalho) return;
       await fetch(`/api/pessoas/${uid}`, {
         method: 'PUT',
         headers: { ...cabecalho, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ papel, departamento, areasVisiveis }),
+        body: JSON.stringify({ papel, departamento, areasVisiveis, abas }),
       });
       await carregar();
     },
@@ -201,8 +199,8 @@ export function TelaUsuarios() {
             pessoa={p}
             areas={areas}
             departamentos={departamentos}
-            onAtualizar={(papel, departamento, areasVisiveis) =>
-              atualizar(p.uid, papel, departamento, areasVisiveis)
+            onAtualizar={(papel, departamento, areasVisiveis, abas) =>
+              atualizar(p.uid, papel, departamento, areasVisiveis, abas)
             }
             onRemover={() => remover(p.uid)}
           />

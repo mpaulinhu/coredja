@@ -1,5 +1,6 @@
 import { getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getFirestoreDb } from './firebase';
 import type { Papel, Pessoa } from './papeis';
 
@@ -31,6 +32,8 @@ export interface NovaPessoa {
   papel: Papel;
   departamento?: string;
   areasVisiveis: string[];
+  /** Abas do menu. Ausente = o padrão do cargo (ver `abasDaPessoa`). */
+  abas?: string[];
 }
 
 /** Uma pessoa recém-convidada, com a senha temporária que ela usa no primeiro login. */
@@ -78,6 +81,10 @@ export const pessoasStore = {
       papel: dados.papel,
       departamento: dados.departamento,
       areasVisiveis: dados.areasVisiveis,
+      // Só grava quando o admin escolheu algo: ausente significa "o padrão do
+      // cargo", e gravar a lista padrão congelaria o menu desta pessoa se o
+      // padrão mudar depois.
+      ...(dados.abas ? { abas: dados.abas } : {}),
     };
     await db().collection(COLECAO).doc(usuario.uid).set(pessoa);
 
@@ -86,13 +93,27 @@ export const pessoasStore = {
 
   async atualizar(
     uid: string,
-    dados: { papel: Papel; departamento?: string; areasVisiveis: string[] },
+    dados: {
+      papel: Papel;
+      departamento?: string;
+      areasVisiveis: string[];
+      abas?: string[] | null;
+    },
   ): Promise<void> {
-    await db().collection(COLECAO).doc(uid).update({
-      papel: dados.papel,
-      departamento: dados.departamento,
-      areasVisiveis: dados.areasVisiveis,
-    });
+    await db()
+      .collection(COLECAO)
+      .doc(uid)
+      .update({
+        papel: dados.papel,
+        departamento: dados.departamento,
+        areasVisiveis: dados.areasVisiveis,
+        // `null` apaga o campo e devolve a pessoa ao padrão do cargo —
+        // `undefined` seria ignorado pelo Firestore, deixando a escolha
+        // antiga gravada para sempre.
+        ...(dados.abas === undefined
+          ? {}
+          : { abas: dados.abas === null ? FieldValue.delete() : dados.abas }),
+      });
   },
 
   /** Remove a ficha em `pessoas` — a pessoa perde acesso ao Coredja, mas a
