@@ -286,6 +286,14 @@ export function TelaAvisos() {
       const holyrics = dados.holyrics;
       if (!holyrics || holyrics.estado === 'enviado') return;
 
+      // Na fila do Conector: saiu daqui, ainda não chegou ao telão. Dizer
+      // "publicado" e calar seria prometer o que ainda não aconteceu — ver
+      // `recadoDoHolyrics` em `TelaCulto`, mesma decisão.
+      if (holyrics.estado === 'na-fila') {
+        setRecado('Publicado. Mandando para o telão...');
+        return;
+      }
+
       const complemento = holyrics.motivo ?? '';
       // Nenhum destes é falha: o envio fez o que dava para fazer, e o recado
       // conta o que ficou de fora (ou onde a arte foi parar).
@@ -323,6 +331,13 @@ export function TelaAvisos() {
         recarregarTelao();
         return;
       }
+      if (holyrics.estado === 'na-fila') {
+        // `recarregarTelao` mesmo assim: o servidor já anotou qual aviso tem
+        // a arte no ar, e é isso que troca o botão para "Tirar a arte".
+        setRecado('Mandando a arte para o telão...');
+        recarregarTelao();
+        return;
+      }
       setRecado(`Não foi possível projetar a arte. ${holyrics.motivo ?? ''}`.trim());
     },
     [chamar, recarregarTelao],
@@ -340,7 +355,7 @@ export function TelaAvisos() {
       const holyrics = dados.holyrics;
       if (!holyrics) return;
 
-      if (holyrics.estado === 'enviado') {
+      if (holyrics.estado === 'enviado' || holyrics.estado === 'na-fila') {
         setRecado('Audiovisual avisado. Quem opera projeta na hora certa.');
         return;
       }
@@ -374,6 +389,11 @@ export function TelaAvisos() {
     const holyrics = dados.holyrics;
     if (!holyrics || holyrics.estado === 'enviado') {
       setRecado('Arte retirada do telão.');
+      recarregarTelao();
+      return;
+    }
+    if (holyrics.estado === 'na-fila') {
+      setRecado('Tirando a arte do telão...');
       recarregarTelao();
       return;
     }

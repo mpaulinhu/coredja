@@ -1,4 +1,4 @@
-import { fecharArteNoHolyrics, holyricsParaTela as paraTela } from '@/lib/holyrics';
+import { fecharArteNoHolyrics, holyricsParaTela as paraTela, deuCerto } from '@/lib/holyrics';
 import { podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 import { registrarArteNoAr } from '@/lib/telao-fila-store';
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   const holyrics = await fecharArteNoHolyrics();
-  if (!holyrics || holyrics.estado === 'enviado') {
+  if (!holyrics || deuCerto(holyrics.estado)) {
     await registrarArteNoAr(null);
   }
   return Response.json({ holyrics: paraTela(holyrics) });

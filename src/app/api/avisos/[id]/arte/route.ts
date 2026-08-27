@@ -1,5 +1,5 @@
 import { avisosStore } from '@/lib/avisos-store';
-import { holyricsParaTela as paraTela, projetarArteDoAviso } from '@/lib/holyrics';
+import { holyricsParaTela as paraTela, projetarArteDoAviso, deuCerto } from '@/lib/holyrics';
 import { podeFazer } from '@/lib/papeis';
 import { pessoaDaRequisicao } from '@/lib/sessao';
 import { registrarArteNoAr } from '@/lib/telao-fila-store';
@@ -40,7 +40,7 @@ export async function POST(
   }
 
   const holyrics = await projetarArteDoAviso(aviso.imagem);
-  if (holyrics.estado === 'enviado') {
+  if (deuCerto(holyrics.estado)) {
     await registrarArteNoAr(id);
   }
 

@@ -75,6 +75,29 @@ interface Lembrado {
 let lembrado: Lembrado | null = null;
 
 /**
+ * Falhas seguidas desde a última vez que o telão respondeu.
+ *
+ * ┌─ POR QUE NÃO ACUSAR NA PRIMEIRA ───────────────────────────────────────┐
+ * O selo dizia "telão desconectado" com tudo funcionando (igreja,
+ * 27/08/2026). A causa: uma única sonda infeliz — o prazo aqui é curto
+ * (1,5s) de propósito, e o Conector reporta `holyricsOk` a partir da própria
+ * sonda dele, que pode ter pego o Holyrics ocupado num render. Uma falha
+ * isolada virava meio minuto de selo vermelho, porque o resultado fica
+ * lembrado por `VALIDADE_MS`.
+ *
+ * Exigir DUAS falhas seguidas troca uma mentira frequente por um atraso raro:
+ * o telão que caiu de verdade continua caindo na sonda seguinte, e o selo
+ * acende com no máximo 30s de atraso. O erro caro aqui é o falso alarme —
+ * quem opera aprende a ignorar um selo que mente, e aí ele não serve para
+ * nada no dia em que estiver certo.
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
+let falhasSeguidas = 0;
+
+/** Quantas falhas seguidas antes de acender o selo de desconectado. */
+const FALHAS_PARA_ACUSAR = 2;
+
+/**
  * Uma consulta em andamento, compartilhada por quem chegar enquanto ela corre.
  *
  * Sem isto, três telas abertas ao mesmo tempo (o que acontece no domingo:
@@ -100,9 +123,10 @@ export async function estadoDoTelao(forcar = false): Promise<EstadoDoTelao> {
   if (!forcar && emAndamento) return emAndamento;
 
   emAndamento = sondar().then((estado) => {
-    lembrado = { estado, expiraEm: Date.now() + VALIDADE_MS };
+    const suavizado = suavizar(estado, forcar);
+    lembrado = { estado: suavizado, expiraEm: Date.now() + VALIDADE_MS };
     emAndamento = null;
-    return estado;
+    return suavizado;
   });
 
   return emAndamento;
@@ -111,6 +135,34 @@ export async function estadoDoTelao(forcar = false): Promise<EstadoDoTelao> {
 /** Descarta o que está lembrado. Usado ao salvar configuração nova. */
 export function esquecerEstadoDoTelao(): void {
   lembrado = null;
+  falhasSeguidas = 0;
+}
+
+/**
+ * Aplica a tolerância a uma falha isolada — ver `falhasSeguidas`.
+ *
+ * `forcar` pula a tolerância: quem apertou "Testar conexão" quer o resultado
+ * DESTA sonda, não uma média. Segurar a má notícia ali seria esconder
+ * justamente o que a pessoa foi conferir.
+ *
+ * `nao-configurado` também passa direto: não é falha de rede, é ausência de
+ * configuração, e não tem por que ser confirmada duas vezes.
+ */
+function suavizar(estado: EstadoDoTelao, forcar: boolean): EstadoDoTelao {
+  if (estado !== 'desconectado') {
+    falhasSeguidas = 0;
+    return estado;
+  }
+  if (forcar) return estado;
+
+  falhasSeguidas += 1;
+  if (falhasSeguidas >= FALHAS_PARA_ACUSAR) return 'desconectado';
+
+  // Primeira falha: mantém o que se sabia antes. Sem nada sabido (primeira
+  // consulta desde que o servidor subiu), 'conectado' é o palpite certo — o
+  // caso comum é estar tudo bem, e a sonda seguinte corrige em 30s se não
+  // estiver.
+  return lembrado?.estado ?? 'conectado';
 }
 
 /**

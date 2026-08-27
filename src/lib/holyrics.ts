@@ -47,6 +47,19 @@ export type ResultadoHolyrics =
   | { estado: 'nao-suportado'; motivo: string }
   | { estado: 'enviado' }
   /**
+   * Deixado na fila para o Conector executar — ainda NÃO chegou ao Holyrics.
+   *
+   * Estado próprio, e não `enviado`, porque as duas coisas são diferentes do
+   * ponto de vista de quem está na cabine: `enviado` significa que o Holyrics
+   * respondeu, `na-fila` significa que o comando saiu daqui e o Conector vai
+   * pegá-lo — normalmente em menos de um segundo, mas não sempre.
+   *
+   * Tratar os dois como iguais foi o que fez a tela dizer "tudo certo"
+   * enquanto o telão levava treze segundos para reagir (igreja, 27/08/2026).
+   * A tela não pode prometer o que ainda não aconteceu.
+   */
+  | { estado: 'na-fila' }
+  /**
    * Texto no telão e arte a caminho da pasta de Fotos do Holyrics, pela
    * ponte. Estado próprio (e não `enviado`) porque a pessoa precisa saber
    * que a arte NÃO subiu sozinha — ela está lá para ser exibida pela cabine.
@@ -55,6 +68,19 @@ export type ResultadoHolyrics =
   /** Texto foi, imagem ficou para trás — ver `MOTIVO_IMAGEM_FICOU_DE_FORA`. */
   | { estado: 'enviado-sem-imagem'; motivo: string }
   | { estado: 'falhou'; motivo: string };
+
+/**
+ * O comando saiu daqui sem erro — chegou ao Holyrics OU está na fila do
+ * Conector.
+ *
+ * Existe para que nenhum chamador precise lembrar de listar `na-fila` ao lado
+ * de `enviado`. Quando `na-fila` foi criado, havia doze comparações
+ * `estado === 'enviado'` espalhadas por telas e rotas; esquecer uma faria o
+ * caminho normal (com Conector) ser reportado como falha.
+ */
+export function deuCerto(estado: string): boolean {
+  return estado === 'enviado' || estado === 'na-fila';
+}
 
 /**
  * Lê a configuração, com o que foi salvo na tela de Configurações ganhando do
@@ -258,7 +284,7 @@ export async function enviarAvisoAoHolyrics(
   // aceita texto (ver `MOTIVO_IMAGEM_FICOU_DE_FORA`). Pela FILA é diferente:
   // a ponte recebeu a arte junto (`dadosDoComando.aviso` acima) e a grava na
   // pasta de Fotos do Holyrics — ver `holyrics.ts` da ponte.
-  if (resultado.estado === 'enviado' && aviso.imagem) {
+  if (deuCerto(resultado.estado) && aviso.imagem) {
     if (!pelaFila) {
       return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
     }
@@ -368,7 +394,7 @@ export async function enviarAvisoAFilaDoHolyrics(aviso: {
     },
   );
 
-  if (resultado.estado === 'enviado' && aviso.imagem) {
+  if (deuCerto(resultado.estado) && aviso.imagem) {
     return { estado: 'enviado-sem-imagem', motivo: MOTIVO_IMAGEM_FICOU_DE_FORA };
   }
   return resultado;
@@ -454,7 +480,7 @@ async function entregar(
   // ficou de fora (`MOTIVO_IMAGEM_FICOU_DE_FORA`).
   if (await ponteEstaViva()) {
     const enfileirou = await enfileirarComando(comando.tipo, comando.dados);
-    if (enfileirou) return { resultado: { estado: 'enviado' }, pelaFila: true };
+    if (enfileirou) return { resultado: { estado: 'na-fila' }, pelaFila: true };
     // Não conseguiu enfileirar: cai para o direto abaixo, que ao menos tenta.
   }
 
@@ -464,7 +490,7 @@ async function entregar(
     // Não alcançou. Se há ponte viva, ela resolve.
     if (await ponteEstaViva()) {
       const enfileirou = await enfileirarComando(comando.tipo, comando.dados);
-      if (enfileirou) return { resultado: { estado: 'enviado' }, pelaFila: true };
+      if (enfileirou) return { resultado: { estado: 'na-fila' }, pelaFila: true };
 
       return {
         resultado: {
@@ -746,8 +772,8 @@ export function holyricsParaTela(
   resultado: ResultadoHolyrics,
 ): HolyricsParaTela | null {
   if (resultado.estado === 'nao-configurado') return null;
-  if (resultado.estado === 'enviado') return { estado: 'enviado' };
-  return { estado: resultado.estado, motivo: resultado.motivo };
+  if (deuCerto(resultado.estado)) return { estado: resultado.estado };
+  return { estado: resultado.estado, motivo: (resultado as { motivo?: string }).motivo };
 }
 
 /* ────────────────────────────────────────────────────────────────────────────

@@ -25,6 +25,36 @@ interface RespostaHolyrics {
   holyrics?: { estado: string; motivo?: string } | null;
 }
 
+/**
+ * O recado a mostrar sobre o Holyrics — `null` quando não há o que dizer.
+ *
+ * Três desfechos, e a tela precisa separar os três:
+ *
+ * - **`enviado`** — o Holyrics respondeu. Silêncio: quem operou já vê o
+ *   efeito no telão, e um aviso de sucesso a cada bloco seria ruído.
+ * - **`na-fila`** — o comando foi deixado para o Conector e ainda não chegou
+ *   ao Holyrics. Normalmente é instantâneo, mas quando não é (Holyrics
+ *   fechado, rede oscilando) a tela dizia "tudo certo" enquanto o telão
+ *   ficava parado — foi o que se viu na igreja em 27/08/2026. Dizer que está
+ *   a caminho é mais honesto do que prometer que chegou.
+ * - **qualquer outro** — falhou de verdade, com motivo.
+ *
+ * `acao` é o que aconteceu AQUI e não depende do Holyrics ("Bloco avançado"):
+ * o culto andou de qualquer jeito, e a frase precisa começar por essa
+ * certeza antes de falar do que é incerto.
+ */
+function recadoDoHolyrics(
+  holyrics: { estado: string; motivo?: string } | null | undefined,
+  acao: string,
+  oQueVai = 'o cronômetro',
+): string | null {
+  if (!holyrics || holyrics.estado === 'enviado') return null;
+  if (holyrics.estado === 'na-fila') {
+    return `${acao}. Mandando ${oQueVai} para o telão...`;
+  }
+  return `${acao}, mas ${oQueVai} não foi ao Holyrics. ${holyrics.motivo ?? ''}`.trim();
+}
+
 /** Distância em minutos entre dois horários `"HH:MM"`, sempre positiva. */
 function distanciaMinutos(a: string, b: string): number {
   const [ha, ma] = a.split(':').map(Number);
@@ -152,9 +182,7 @@ export function TelaCulto() {
     const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
     if (!resp.ok) return corpo?.erro ?? 'Não foi possível avançar.';
 
-    const holyrics = corpo?.holyrics;
-    if (!holyrics || holyrics.estado === 'enviado') return null;
-    return `Bloco avançado, mas o cronômetro não foi ao Holyrics. ${holyrics.motivo ?? ''}`.trim();
+    return recadoDoHolyrics(corpo?.holyrics, 'Bloco avançado');
   }, []);
 
   /** Pula direto para um bloco (adiante ou de volta). Mesmo contrato de `avancar`. */
@@ -170,9 +198,7 @@ export function TelaCulto() {
       const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
       if (!resp.ok) return corpo?.erro ?? 'Não foi possível mudar o bloco.';
 
-      const holyrics = corpo?.holyrics;
-      if (!holyrics || holyrics.estado === 'enviado') return null;
-      return `Bloco trocado, mas o cronômetro não foi ao Holyrics. ${holyrics.motivo ?? ''}`.trim();
+      return recadoDoHolyrics(corpo?.holyrics, 'Bloco trocado');
     },
     [],
   );
@@ -196,15 +222,13 @@ export function TelaCulto() {
       const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
       if (!resp.ok) return corpo?.erro ?? 'Não foi possível dar mais tempo.';
 
-      const holyrics = corpo?.holyrics;
       // Sem Holyrics configurado não há erro a relatar: o cronômetro da
       // própria tela já recebeu os minutos, que é o efeito principal agora.
       // `holyricsParaTela` devolve null quando a integração nem está
       // configurada, então cair aqui significa erro de verdade.
-      if (!holyrics || holyrics.estado === 'enviado') return null;
       const gesto =
-        minutos > 0 ? `Mais ${minutos} min` : `Menos ${Math.abs(minutos)} min`;
-      return `${gesto} na tela, mas o Holyrics não recebeu. ${holyrics.motivo ?? ''}`.trim();
+        minutos > 0 ? `Mais ${minutos} min na tela` : `Menos ${Math.abs(minutos)} min na tela`;
+      return recadoDoHolyrics(corpo?.holyrics, gesto);
     },
     [],
   );
@@ -229,9 +253,7 @@ export function TelaCulto() {
       const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
       if (!resp.ok) return corpo?.erro ?? 'Não foi possível acertar o tempo.';
 
-      const holyrics = corpo?.holyrics;
-      if (!holyrics || holyrics.estado === 'enviado') return null;
-      return `Tempo acertado na tela, mas o Holyrics não recebeu. ${holyrics.motivo ?? ''}`.trim();
+      return recadoDoHolyrics(corpo?.holyrics, 'Tempo acertado na tela');
     },
     [],
   );
@@ -251,10 +273,8 @@ export function TelaCulto() {
       const corpo = (await resp.json().catch(() => null)) as RespostaHolyrics | null;
       if (!resp.ok) return corpo?.erro ?? 'Não foi possível pausar.';
 
-      const holyrics = corpo?.holyrics;
-      if (!holyrics || holyrics.estado === 'enviado') return null;
-      const gesto = pausarAgora ? 'Pausado' : 'Retomado';
-      return `${gesto} aqui, mas o Holyrics não acompanhou. ${holyrics.motivo ?? ''}`.trim();
+      const gesto = pausarAgora ? 'Pausado aqui' : 'Retomado aqui';
+      return recadoDoHolyrics(corpo?.holyrics, gesto);
     },
     [],
   );
